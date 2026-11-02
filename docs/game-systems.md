@@ -89,7 +89,7 @@
 
 ## 6. 主岛
 
-文件：`sim/actions.ts`（`gather`、`buildRaft`、`plant`、`harvest`、`installPart`、`repairPlane`）、`ui/scenes/HomePanel.tsx` · 数值：`B.home`
+文件：`sim/actions.ts`（`gather`、`plant`、`harvest`、`installPart`、`repairPlane`）、`ui/scenes/HomePanel.tsx` · 数值：`B.home`
 
 - 掰树枝：木头 +1，20 分钟。救出伐木工后改为砍树：木头 +3，30 分钟。
 - 浅滩捞鱼：60% 得 1 条鱼，30 分钟。
