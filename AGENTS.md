@@ -37,6 +37,7 @@ npm run deploy     # 打包并发布到 Cloudflare（需要 wrangler 已登录�
 7. **改动主线**（岛屿、请求、解锁条件）时同步更新 `src/sim/bot.ts` 的 `STEPS`，自动通关测试会验证。岛屿不是开局生成的：剧情条件满足、并且锚点岛修好灯塔后，才按 `REVEALS` 在那座灯塔新照亮的海域里生成。
 8. 颜色只用 `ui/styles/global.css` 里的 CSS 变量，深浅两套主题都要正确。`.isle/.warn/.stop/.fog/.open/.seen/.neutral` 是纯色块背景类，不要另作他用。
 9. **界面功能的显示与否用 `has(state, id)`**（`sim/tutorial.ts`），物品名用 `<ItemName>`；手机布局（≤760px）也要检查。
+10. **界面文字用中性的书面语**（“无人工作”“仓库已满”），口语和幽默只用在剧情、日志和对白里。
 
 ## 代码地图（最常改的地方）
 
@@ -53,6 +54,8 @@ npm run deploy     # 打包并发布到 Cloudflare（需要 wrangler 已登录�
 | 岛屿什么时候出现、在哪 | `src/config/world.ts` 的 `REVEALS`、`src/sim/reveal.ts`、`src/sim/worldgen.ts` |
 | 迷雾、视野、寻路 | `src/sim/map.ts` |
 | 新手引导（功能逐步出现、提示） | `src/sim/tutorial.ts`、`src/ui/components/Tip.tsx` |
+| 聚焦引导（调暗四周、高亮一个按钮） | `src/ui/components/Coach.tsx`（`COACH` 步骤 + 元素上的 `data-coach`） |
+| 新配方全屏弹窗 | `src/ui/components/RecipePopup.tsx` |
 | 欢迎页、开场剧情、帮助 | `src/ui/screens/`、`src/ui/dialogs/HelpDialog.tsx` |
 | 目标指引 | `src/sim/objectives.ts` |
 | 界面 | `src/ui/`（场景在 `scenes/`，弹窗在 `dialogs/`） |
@@ -62,5 +65,6 @@ npm run deploy     # 打包并发布到 Cloudflare（需要 wrangler 已登录�
 - 数值未经真人试玩，只保证流程可通关（脚本玩家会补物资、保命）。
 - 只有一档存档。
 - 地图标签在缩放到边缘时可能被裁切。
-- `SAVE_VERSION = 3`，旧存档不兼容（地图改为灯塔探路）。
+- `SAVE_VERSION = 4`（v3 存档可迁移，更早的不兼容）。
+- 离线：页面加载后断网可以继续玩（游戏没有任何网络请求，存档在 localStorage），但断网时刷新或重新打开页面会打不开，因为还没有 Service Worker 缓存。字体来自 Google Fonts，断网时退回系统字体。
 - 没有音效和美术资源，界面完全是文字和方格。
