@@ -2,7 +2,9 @@
 
 单人网页文字经营探索游戏：从坠机幸存者起步，救回同伴、培训原住民、开通运输线，把散落的岛屿连成自动运转的网络，最后修好直升机，抵达进出口局。支持中文和英文。
 
-设计方案见 `design/`。
+线上试玩：https://foghaul.junxuan-bao.workers.dev
+
+设计方案见 `design/`。开发文档见 [AGENTS.md](AGENTS.md) 和 `docs/`（[架构](docs/architecture.md)、[玩法系统](docs/game-systems.md)、[开发指南](docs/development.md)）。
 
 ## 运行
 
@@ -11,6 +13,7 @@ npm install
 npm run dev      # 开发服务器，带调试面板
 npm test         # 单元测试 + 自动通关测试
 npm run build    # 产出 dist/，纯静态，可直接部署
+npm run deploy   # 打包并发布到 Cloudflare Workers（需先 npx wrangler login）
 ```
 
 ## 调数值
