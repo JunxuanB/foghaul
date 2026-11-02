@@ -113,8 +113,8 @@ export function MapView({ picking, setPicking }: { picking: boolean; setPicking:
       </div>
       {picking && (
         <div className={s.picker}>
-          {discovered
-            .filter((i) => i.id !== 'bureau' || g.flags.flightDone)
+          {g.islands
+            .filter((i) => (i.discovered || (i.revealed && g.hints[i.id])) && (i.id !== 'bureau' || g.flags.flightDone))
             .map((i) => {
               const d = dirOf(i.x - p.x, i.y - p.y);
               return (
@@ -126,7 +126,10 @@ export function MapView({ picking, setPicking }: { picking: boolean; setPicking:
                     setPicking(false);
                   }}
                 >
-                  <span>{t('island.' + i.id)}</span>
+                  <span>
+                    {t('island.' + i.id)}
+                    {!i.discovered && <span className="small"> · {t('ui.notFound')}</span>}
+                  </span>
                   <span style={{ color: 'var(--soft)', whiteSpace: 'nowrap' }}>
                     {d.arrow} {t('ui.tiles', { n: manhattan(i.x, i.y, p.x, p.y) })}
                   </span>

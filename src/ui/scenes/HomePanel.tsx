@@ -41,7 +41,7 @@ export function HomePanel() {
               {t('ui.chop', { n: H.chop.wood, min: H.chop.minutes })}
             </button>
           ) : (
-            <button className={'cmd' + (!g.player.hasRaft && !canRaft ? ' lead' : '')} onClick={() => store.dispatch({ t: 'gather', what: 'branch' })}>
+            <button data-coach="gather-branch" className={'cmd' + (!g.player.hasRaft && !canRaft ? ' lead' : '')} onClick={() => store.dispatch({ t: 'gather', what: 'branch' })}>
               {t('ui.branch', { min: H.branch.minutes })}
             </button>
           )}

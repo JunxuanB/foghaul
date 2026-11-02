@@ -98,5 +98,6 @@ export function learnRecipe(state: GameState, r: RecipeId): void {
   if (state.player.recipes.includes(r)) return;
   state.player.recipes.push(r);
   if (!state.newRecipes.includes(r)) state.newRecipes.push(r);
+  if (!state.recipePopup.includes(r)) state.recipePopup.push(r);
   say(state, 'log.newRecipe', { recipe: { k: 'recipe.' + r } }, 'got');
 }

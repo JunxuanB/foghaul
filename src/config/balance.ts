@@ -212,7 +212,7 @@ export const BALANCE = {
 
   // ---------------- 存档 ----------------
   save: {
-    key: 'foghaul.save.v3',
+    key: 'foghaul.save.v4',
     autosaveSeconds: 10,
   },
 };

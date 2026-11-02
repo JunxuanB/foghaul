@@ -175,6 +175,8 @@ export interface GameState {
   tips: string[];
   /** 刚学会、还没在制作页看过的配方 */
   newRecipes: RecipeId[];
+  /** 等待用全屏弹窗告诉玩家的新配方 */
+  recipePopup: RecipeId[];
   player: PlayerState;
   villages: Record<VillageId, VillageState>;
   flags: {
@@ -249,7 +251,8 @@ export type Command =
   | { t: 'fly'; to: string }
   | { t: 'toggleTwoStep' }
   | { t: 'dismissTip'; id: string }
-  | { t: 'seenRecipes' };
+  | { t: 'seenRecipes' }
+  | { t: 'ackRecipes' };
 
 export interface Result {
   ok: boolean;

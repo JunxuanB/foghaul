@@ -4,13 +4,15 @@ import { t } from '../../i18n';
 import { activeTip } from '../../sim/tutorial';
 import { useGame, useStore } from '../../store/hooks';
 import { Rich } from './Text';
+import { useCoachActive } from './Coach';
 
 /** 情境提示：同一时间最多一条，点“知道了”关闭 */
 export function TipBox() {
   const g = useGame();
   const store = useStore();
+  const coach = useCoachActive();
   const id = activeTip(g);
-  if (!id) return null;
+  if (!id || coach) return null;
   return (
     <div className="box tipbox-card" role="note">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>

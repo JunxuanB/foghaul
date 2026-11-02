@@ -28,7 +28,7 @@ export function MapPanel() {
     <section aria-label={t('ui.chart')} style={{ flex: '1 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <MapView picking={picking} setPicking={setPicking} />
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '8px 12px', fontSize: 15 }}>
-        <p style={{ flex: '1 1 200px', margin: 0 }}>{guide}</p>
+        <p data-coach="guide" style={{ flex: '1 1 200px', margin: 0 }}>{guide}</p>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="cmd mini" onClick={() => setPicking(!picking)}>
             {picking ? t('ui.collapse') : tgt ? t('ui.change') : t('ui.pickTarget')}
@@ -50,7 +50,7 @@ export function MapPanel() {
       </div>
       {atSea && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(3, ${k}px)`, gridTemplateRows: `repeat(2, ${k}px)`, gap: 4 }}>
+          <div data-coach="dpad" style={{ display: 'grid', gridTemplateColumns: `repeat(3, ${k}px)`, gridTemplateRows: `repeat(2, ${k}px)`, gap: 4 }}>
             <span />
             <button className="cmd" style={{ padding: 0 }} onClick={() => go(0, -1)} aria-label={t('ui.moveUp')}>{t('ui.up')}</button>
             <span />

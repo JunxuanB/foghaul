@@ -30,7 +30,7 @@ export function NeedList({ need, progress, title, reward, blocked }: { need: Nee
       </ul>
       {reward && <span className="small">{reward}</span>}
       {blocked && <span className="tone-al">{blocked}</span>}
-      <button className="cmd lead" style={{ alignSelf: 'flex-start' }} disabled={!can || !!blocked} onClick={() => store.dispatch({ t: 'deliver' })}>
+      <button data-coach="deliver" className="cmd lead" style={{ alignSelf: 'flex-start' }} disabled={!can || !!blocked} onClick={() => store.dispatch({ t: 'deliver' })}>
         {t('ui.deliver')}
       </button>
     </div>

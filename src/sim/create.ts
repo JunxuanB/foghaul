@@ -77,7 +77,7 @@ export function createGame(seed: number = newSeed()): GameState {
 
   const S = BALANCE.survival;
   const state: GameState = {
-    version: 3,
+    version: 4,
     seed,
     rng: seed ^ 0x5bd1e995,
     time: BALANCE.time.startMinute,
@@ -92,6 +92,7 @@ export function createGame(seed: number = newSeed()): GameState {
     unlocks: [],
     tips: [],
     newRecipes: [],
+    recipePopup: [],
     player: {
       x: home.x,
       y: home.y,

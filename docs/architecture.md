@@ -49,6 +49,7 @@ useGame()（useSyncExternalStore）→ 整棵 React 树重渲染，读 store.sta
 | `seen[]` | 60×36 的 0/1 数组，已探索的海面 |
 | `lit[]` | 60×36 数组，每格记录第一次照亮它的照明事件编号，0 为迷雾。只有灯塔（含主岛自带的）和试飞会照亮海域；`lightSeq` 是下一个事件编号；`lighthouseAsked` 记录已经提示过要修灯塔的岛 |
 | `newRecipes[]` | 刚学会、还没在制作页看过的配方（制作标签显示“新”） |
+| `recipePopup[]` | 等待用全屏弹窗告诉玩家的新配方 |
 | `unlocks[]` | 已经出现的界面功能（新手引导逐步展示），见 `sim/tutorial.ts` |
 | `tips[]` | 玩家已关闭的情境提示 |
 | `player` | 位置、`at`（靠岸的岛 id，null 表示在海上）、生命/水/食物、背包、货舱、随船人员、经验、武器、已会的配方、航行目标 |
@@ -111,8 +112,8 @@ type Param = string | number | Msg | { stock: Stock } | { list: Msg[] };
 
 ## 存档（sim/save.ts）
 
-- 键：`foghaul.save.v3`（`BALANCE.save.key`），值是整个 `GameState` 的 JSON。
-- `SAVE_VERSION = 3`（v3 改为灯塔探路，与旧版不兼容，旧存档会被忽略）。读档时 `migrate()` 只接受同版本，否则返回 null（视为新游戏）。**修改 `GameState` 结构时要提升版本号并在 `migrate` 里写迁移**，否则玩家的旧存档会被丢弃。
+- 键：`foghaul.save.v4`（`BALANCE.save.key`），值是整个 `GameState` 的 JSON。读档时也会找旧键 `foghaul.save.v3`。
+- `SAVE_VERSION = 4`。`migrate()` 示范了一次迁移：v3 → v4 补上 `recipePopup`。v2 及更早（地图生成方式不同）不兼容，会被忽略。读档时 `migrate()` 只接受同版本，否则返回 null（视为新游戏）。**修改 `GameState` 结构时要提升版本号并在 `migrate` 里写迁移**，否则玩家的旧存档会被丢弃。
 - GameStore 每 10 秒自动存档，页面隐藏和关闭时也存。设置弹窗提供导出 / 导入 JSON 和新游戏。
 
 语言（`foghaul.lang`）和主题（`foghaul.theme`）各自单独存在 localStorage 里，不属于存档。
@@ -121,7 +122,7 @@ type Param = string | number | Msg | { stock: Stock } | { list: Msg[] };
 
 - 每 200ms 一次 `tick`。现实时间差最多按 1 秒计（`maxRealStepMs`），切回页面不会一下跳过很多时间。
 - 换算：`游戏分钟 = 现实秒 / 37.5 × 60 × speed`。`speed` 是调试倍率。
-- `running = !paused && !blocked && !document.hidden && !cutscene`。`blocked` 在欢迎页和开场剧情期间为 true。`hadSave` 记录启动时是否有存档，决定欢迎页是否显示“继续”。不在运行时 tick 直接返回，因此“离线不推进”是天然成立的。
+- `running = !paused && holds 为空 && !document.hidden && !cutscene`。`hold(reason, on)` 按理由暂停时间：`screen`（欢迎页、开场剧情）、`coach`（聚焦引导）、`recipe`（新配方弹窗）。`hadSave` 记录启动时是否有存档，决定欢迎页是否显示“继续”。不在运行时 tick 直接返回，因此“离线不推进”是天然成立的。
 - `replace(state)` 用于导入存档和调试预设，`newGame(seed?)` 清档重开。
 
 ## UI 结构
@@ -144,6 +145,8 @@ App（UiContext：当前弹窗、地图缩放、主题、语言、restart；键�
 ├─ TipBox（情境提示，场景顶部）
 ├─ 弹窗（原生 <dialog>）：People / Islands / Routes / Journal / Help / Settings
 ├─ Cutscene（试飞、结局）
+├─ RecipePopup（新配方全屏弹窗）
+├─ Coach（聚焦引导：调暗四周、高亮 data-coach 目标）
 └─ DevPanel（仅开发模式或 ?debug）
 ```
 

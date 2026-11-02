@@ -23,10 +23,12 @@ interface Feature {
 export const FEATURES: Feature[] = [
   // 第一根树枝之后才出现“当前目标”和背包
   { id: 'goal', when: (s) => wood(s) >= 1 || s.player.hasRaft },
-  // 第二件事做完（时间过去半小时）后引入时间系统：时钟、昼夜、生命水食物
+  // 第二件事做完（时间过去半小时）后只引入时钟和昼夜
   { id: 'clock', when: (s) => s.time >= BALANCE.time.startMinute + 30 || s.player.hasRaft, log: 'unlock.clock' },
+  // 快要出海时（木头差不多够造木筏），或者真的渴了饿了，才出现生命、水、食物
+  { id: 'vitals', when: (s) => (has(s, 'clock') && wood(s) >= 6) || s.player.hasRaft || s.player.water < 50 || s.player.food < 45, log: 'unlock.vitals' },
   // 渴了才想到喝海水
-  { id: 'seawater', when: (s) => s.player.water <= 55 || s.player.hasRaft, log: 'unlock.seawater' },
+  { id: 'seawater', when: (s) => has(s, 'vitals') && (s.player.water <= 55 || s.player.hasRaft), log: 'unlock.seawater' },
   { id: 'dive', when: (s) => s.player.hasRaft },
   { id: 'shoreFish', when: (s) => wood(s) >= 2 || s.player.hasRaft, log: 'unlock.shoreFish' },
   { id: 'craft', when: (s) => wood(s) >= 3 || s.player.hasRaft || s.player.recipes.length > 1, log: 'unlock.craft' },
@@ -64,23 +66,14 @@ const at = (s: GameState) => (s.player.at ? island(s, s.player.at) : undefined);
 
 /** 按优先级排列；同一时间只显示第一条满足条件、没被关闭的 */
 export const TIPS: Tip[] = [
-  { id: 'start', when: (s) => !s.player.hasRaft && s.player.at === 'home' && !has(s, 'clock') },
-  { id: 'time', when: (s) => has(s, 'clock') && !s.player.hasRaft },
-  { id: 'craft', when: (s) => !s.player.hasRaft && has(s, 'craft') },
-  { id: 'raft', when: (s) => s.player.hasRaft && s.stats.moves === 0 && s.player.at === 'home' },
   { id: 'sea', when: (s) => !s.player.at && s.stats.moves < 30 },
   { id: 'night', when: (s) => s.player.hasRaft && minuteOfDay(s.time) >= 18 * 60 && s.time < 3 * 1440 },
-  { id: 'rescue', when: (s) => at(s)?.kind === 'passenger' && !at(s)!.owned },
-  { id: 'lighthouse', when: (s) => !!at(s) && s.lighthouseAsked.includes(at(s)!.id) && !at(s)!.buildings.lighthouse },
   { id: 'owned', when: (s) => !!at(s)?.owned && at(s)!.kind !== 'home' },
   { id: 'containers', when: (s) => !!at(s)?.owned && s.player.hasRaft && s.islands.filter((i) => i.owned).length >= 2 },
   { id: 'native', when: (s) => at(s)?.kind === 'native' && !at(s)!.owned },
-  { id: 'train', when: (s) => at(s)?.kind === 'native' && !!at(s)!.owned && !s.flags.firstTraining },
-  { id: 'newRecipe', when: (s) => s.newRecipes.length > 0 && s.player.recipes.length > 1 && !s.newRecipes.includes('bottledWater') },
   { id: 'water', when: (s) => s.player.recipes.includes('bottledWater') },
   { id: 'village', when: (s) => at(s)?.kind === 'recipeVillage' || at(s)?.kind === 'laborVillage' },
   { id: 'sleepy', when: (s) => !!at(s)?.sleepy },
-  { id: 'routes', when: (s) => !!roleOf(s, 'pilot')?.active && s.transport.routes.length === 0 && s.player.at === 'home' },
   { id: 'bureau', when: (s) => at(s)?.kind === 'bureau' },
 ];
 

@@ -6,7 +6,7 @@ import { setLang, tm } from '../src/i18n';
 
 describe('full playthrough via real commands', () => {
   for (const seed of [1, 42, 2026, 99991]) {
-    it(`reaches the bureau (seed ${seed})`, () => {
+    it(`reaches the bureau (seed ${seed})`, async () => {
       const s = createGame(seed);
       for (const step of STEPS) {
         step.run(s);
@@ -17,6 +17,9 @@ describe('full playthrough via real commands', () => {
       expect(s.flags.flightDone).toBe(true);
       expect(s.flags.reported).toBe(true);
       expect(s.player.at).toBe('bureau');
+      // 所有引导功能都应该在通关途中出现过
+      const { FEATURES } = await import('../src/sim/tutorial');
+      for (const f of FEATURES) expect(s.unlocks, `feature ${f.id}`).toContain(f.id);
       // 所有日志在两种语言下都能完整渲染
       for (const lang of ['zh', 'en'] as const) {
         setLang(lang);

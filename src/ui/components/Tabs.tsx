@@ -16,7 +16,7 @@ export function Tabs({ tabs, initial, value, onChange }: { tabs: TabDef[]; initi
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <nav role="tablist" style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)' }}>
         {tabs.map((x) => (
-          <button key={x.id} role="tab" aria-selected={x.id === sel.id} className={'tab' + (x.id === sel.id ? ' tab-on' : '')} style={{ flex: '1 1 0', justifyContent: 'center', fontSize: 15 }} onClick={() => setCur(x.id)}>
+          <button key={x.id} data-coach={'tab-' + x.id} role="tab" aria-selected={x.id === sel.id} className={'tab' + (x.id === sel.id ? ' tab-on' : '')} style={{ flex: '1 1 0', justifyContent: 'center', fontSize: 15 }} onClick={() => setCur(x.id)}>
             {x.label}
           </button>
         ))}

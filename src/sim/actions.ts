@@ -786,6 +786,9 @@ function run(state: GameState, cmd: Command): Result {
     case 'seenRecipes':
       state.newRecipes = [];
       return OK;
+    case 'ackRecipes':
+      state.recipePopup = [];
+      return OK;
     case 'dismissTip':
       if (!state.tips.includes(cmd.id)) state.tips.push(cmd.id);
       return OK;

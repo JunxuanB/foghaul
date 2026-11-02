@@ -54,7 +54,7 @@ function Survival() {
   return (
     <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
       {has(g, 'seawater') && (
-        <button className="cmd mini" onClick={() => store.dispatch({ t: 'drinkSea' })} title={t('ui.drinkSeaHint')}>
+        <button data-coach="drink-sea" className="cmd mini" onClick={() => store.dispatch({ t: 'drinkSea' })} title={t('ui.drinkSeaHint')}>
           {t('ui.drinkSea')}
         </button>
       )}
@@ -78,7 +78,7 @@ function Stats({ compact }: { compact: boolean }) {
     [t('ui.food'), p.food, S.maxFood],
   ];
   return (
-    <p style={{ margin: 0, display: 'flex', flexWrap: 'wrap', gap: compact ? '4px 14px' : '4px 28px', fontSize: compact ? 14 : 15 }}>
+    <p data-coach="stats" style={{ margin: 0, display: 'flex', flexWrap: 'wrap', gap: compact ? '4px 14px' : '4px 28px', fontSize: compact ? 14 : 15 }}>
       {items.map(([label, v, max]) => (
         <span key={label} className={low(v)}>
           {label} <span aria-hidden="true">{bar(v, max, compact ? 5 : 10)}</span> {Math.round(v)}
@@ -109,29 +109,29 @@ export function Header() {
       <header style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 10, borderBottom: '1px dashed var(--line)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           {clock ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14 }}>
+            <div data-coach="clock" style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14 }}>
               <strong>{t('ui.clock', { day: c.day, hh: c.hh, mm: c.mm })}</strong>
               <span style={{ color: 'var(--alert)', fontSize: 13 }}>
                 {nightText}
-                {!store.running && !g.cutscene && <span className="tone-st"> · {t('ui.paused')}</span>}
+                {store.paused && <span className="tone-st"> · {t('ui.paused')}</span>}
               </span>
             </div>
           ) : (
             <strong style={{ letterSpacing: '0.2em' }}>{t('ui.title')}</strong>
           )}
-          <button className="cmd" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+          <button data-coach="menu" className="cmd" aria-expanded={menu} onClick={() => setMenu(!menu)}>
             {menu ? t('ui.close') : t('ui.menu')}
           </button>
         </div>
         {menu && (
           <nav aria-label={t('ui.panels')} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
             {nav.map(([k, label]) => (
-              <button key={k} className="cmd" onClick={() => { setMenu(false); ui.open(k); }}>{label}</button>
+              <button key={k} data-coach={'nav-' + k} className="cmd" onClick={() => { setMenu(false); ui.open(k); }}>{label}</button>
             ))}
             {pauseBtn}
           </nav>
         )}
-        {clock && (
+        {has(g, 'vitals') && (
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <Stats compact />
             <Survival />
@@ -146,22 +146,22 @@ export function Header() {
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: ui.lang === 'zh' ? '0.3em' : '0.08em' }}>{t('ui.title')}</h1>
         <div style={{ flex: '1 1 520px', minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', fontSize: 15 }}>
           {clock && (
-            <>
+            <span data-coach="clock" style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px' }}>
               <span style={{ fontWeight: 700 }}>{t('ui.clock', { day: c.day, hh: c.hh, mm: c.mm })}</span>
               <DayBar />
               <span style={{ color: 'var(--alert)' }}>{nightText}</span>
-              {!store.running && !g.cutscene && <span className="tone-st">{t('ui.paused')}</span>}
-            </>
+            </span>
           )}
+          {clock && store.paused && <span className="tone-st">{t('ui.paused')}</span>}
         </div>
         <nav aria-label={t('ui.panels')} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {nav.map(([k, label]) => (
-            <button key={k} className="cmd" onClick={() => ui.open(k)}>{label}</button>
+            <button key={k} data-coach={'nav-' + k} className="cmd" onClick={() => ui.open(k)}>{label}</button>
           ))}
           {pauseBtn}
         </nav>
       </div>
-      {clock && (
+      {has(g, 'vitals') && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 28px' }}>
           <Stats compact={false} />
           <Survival />

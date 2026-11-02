@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getLang, setLang as setI18nLang, type Lang } from '../i18n';
 import { useGame, useStore } from '../store/hooks';
 import { Cutscene } from './components/Cutscene';
+import { Coach } from './components/Coach';
+import { RecipePopup } from './components/RecipePopup';
 import { DevPanel } from './components/DevPanel';
 import { Header } from './components/Header';
 import { IslandsDialog } from './dialogs/IslandsDialog';
@@ -82,7 +84,7 @@ export function App() {
 
   // 欢迎页和剧情介绍时暂停时间
   useEffect(() => {
-    store.setBlocked(screen !== 'game');
+    store.hold('screen', screen !== 'game');
   }, [screen, store]);
 
   useEffect(() => {
@@ -148,6 +150,8 @@ export function App() {
         {dialog === 'settings' && <SettingsDialog />}
         {dialog === 'help' && <HelpDialog />}
         <Cutscene />
+        <RecipePopup />
+        <Coach />
         {SHOW_DEV && <DevPanel />}
         </>
         )}

@@ -20,7 +20,7 @@ function SeaActions() {
           <button className="cmd lead" onClick={() => store.dispatch({ t: 'takeCrate' })}>{t('ui.takeCrate')}</button>
         )}
         {onIsle && (
-          <button className="cmd lead" onClick={() => store.dispatch({ t: 'dock' })}>
+          <button data-coach="dock" className="cmd lead" onClick={() => store.dispatch({ t: 'dock' })}>
             {t('ui.dock', { isl: t('island.' + isl.id) })}
           </button>
         )}

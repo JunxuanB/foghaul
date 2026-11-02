@@ -92,7 +92,7 @@ export function IslandScene() {
         {has(g, 'sea') && <button className="cmd" onClick={() => store.dispatch({ t: 'wait', minutes: 60 })}>{t('ui.wait1h')}</button>}
         <FlyButton isl={isl} />
         {g.player.hasRaft && (
-          <button className="cmd lead" onClick={() => store.dispatch({ t: 'leave' })}>{t('ui.setSail')}</button>
+          <button data-coach="set-sail" className="cmd lead" onClick={() => store.dispatch({ t: 'leave' })}>{t('ui.setSail')}</button>
         )}
       </div>
     </div>
@@ -261,7 +261,7 @@ function PeopleSection({ isl }: { isl: Island }) {
               <span className={meta.cls}>{meta.text}</span>
               <span className="acts">
                 {canTrain && (
-                  <button className="cmd mini" onClick={() => setTraining(training === p.id ? null : p.id)} aria-expanded={training === p.id}>
+                  <button data-coach="train" className="cmd mini" onClick={() => setTraining(training === p.id ? null : p.id)} aria-expanded={training === p.id}>
                     {p.job ? t('ui.retrain') : t('ui.train')}
                   </button>
                 )}
@@ -309,9 +309,8 @@ function StockSection({ isl }: { isl: Island }) {
   const acts = useItemActs();
   return (
     <section>
-      <h3 className="h3">{t('ui.stock')}</h3>
-      <p className="note">{t('ui.stockNote')}</p>
-      <ItemRows stock={isl.stock} acts={acts('stock')} cap={(id) => stockCap(g, isl, id)} empty={t('ui.stockEmpty')} />
+      <h3 className="h3"><Info label={t('ui.stock')} text={t('ui.stockNote')} /></h3>
+      <ItemRows coach="stock-" stock={isl.stock} acts={acts('stock')} cap={(id) => stockCap(g, isl, id)} empty={t('ui.stockEmpty')} />
     </section>
   );
 }
@@ -361,7 +360,7 @@ function BuildSection({ isl }: { isl: Island }) {
             <span className="meta">{r.done ? t('ui.built') : ''}</span>
             <span className="acts">
               {!r.done && r.cost && (
-                <button className={'cmd mini' + (r.key === 'lighthouse' && g.lighthouseAsked.includes(isl.id) && canPay(g, src, r.cost) ? ' lead' : '')} disabled={!canPay(g, src, r.cost)} onClick={r.onClick}>{t('ui.doBuild')}</button>
+                <button data-coach={'build-' + r.key} className={'cmd mini' + (r.key === 'lighthouse' && g.lighthouseAsked.includes(isl.id) && canPay(g, src, r.cost) ? ' lead' : '')} disabled={!canPay(g, src, r.cost)} onClick={r.onClick}>{t('ui.doBuild')}</button>
               )}
             </span>
           </li>

@@ -7,7 +7,7 @@ import type { Stock, Where } from '../../sim/types';
 import { stockLoad } from '../../sim/util';
 import { useGame, useStore } from '../../store/hooks';
 import { has } from '../../sim/tutorial';
-import { ItemName } from './Tip';
+import { Info, ItemName } from './Tip';
 
 export interface Act {
   label: string;
@@ -17,7 +17,7 @@ export interface Act {
   title?: string;
 }
 
-export function ItemRows({ stock, acts, cap, empty }: { stock: Stock; acts: (id: ItemId, n: number) => Act[]; cap?: (id: ItemId) => number; empty?: string }) {
+export function ItemRows({ stock, acts, cap, empty, coach }: { stock: Stock; acts: (id: ItemId, n: number) => Act[]; cap?: (id: ItemId) => number; empty?: string; coach?: string }) {
   const ids = ITEM_ORDER.filter((id) => (stock[id] ?? 0) > 0);
   if (!ids.length) return <p className="empty">{empty ?? t('ui.empty')}</p>;
   return (
@@ -25,7 +25,7 @@ export function ItemRows({ stock, acts, cap, empty }: { stock: Stock; acts: (id:
       {ids.map((id) => {
         const n = stock[id] ?? 0;
         return (
-          <li key={id} className="row">
+          <li key={id} className="row" data-coach={coach ? coach + id : undefined}>
             <span className="nm"><ItemName id={id} /></span>
             <span className="meta">{cap ? `${n}/${cap(id)}` : `×${n}`}</span>
             <span className="acts">
@@ -97,15 +97,15 @@ export function Inventory() {
     <aside style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <section>
         <h2 className="h3">
-          {t('ui.pack')} {stockLoad(p.pack)}/{BALANCE.inventory.packCap}
+          <Info label={t('ui.pack')} text={t('ui.packNote')} /> {stockLoad(p.pack)}/{BALANCE.inventory.packCap}
         </h2>
-        <p className="note">{t('ui.packNote')}</p>
         <ItemRows stock={p.pack} acts={acts('pack')} />
       </section>
       {p.hasRaft && (
         <section>
-          <h2 className="h3">{t('ui.holdCap', { n: stockLoad(p.hold), cap: p.holdCap })}</h2>
-          <p className="note">{t('ui.holdNote')}</p>
+          <h2 className="h3">
+            <Info label={t('ui.hold')} text={t('ui.holdNote')} /> {stockLoad(p.hold)}/{p.holdCap}
+          </h2>
           <ItemRows stock={p.hold} acts={acts('hold')} />
         </section>
       )}

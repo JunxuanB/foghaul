@@ -14,8 +14,8 @@ export class GameStore {
   paused = false;
   /** 调试用时间倍率 */
   speed = 1;
-  /** 欢迎页、剧情介绍等界面打开时暂停时间 */
-  blocked = false;
+  /** 暂停时间的理由（欢迎页、聚焦引导、新配方弹窗……），任何一个存在时间就停 */
+  private holds = new Set<string>();
   /** 启动时本地是否已有存档 */
   readonly hadSave: boolean;
   private listeners = new Set<Listener>();
@@ -64,7 +64,7 @@ export class GameStore {
 
   /** 是否在跑时间：页面可见、未暂停、没有过场 */
   get running(): boolean {
-    return !this.paused && !this.blocked && !document.hidden && !this.state.cutscene;
+    return !this.paused && this.holds.size === 0 && !document.hidden && !this.state.cutscene;
   }
 
   private tick() {
@@ -91,8 +91,12 @@ export class GameStore {
     saveToStorage(this.state);
   };
 
-  setBlocked(b: boolean) {
-    this.blocked = b;
+  /** 按理由暂停/恢复时间 */
+  hold(reason: string, on: boolean) {
+    const had = this.holds.has(reason);
+    if (on === had) return;
+    if (on) this.holds.add(reason);
+    else this.holds.delete(reason);
     this.last = performance.now();
     this.bump();
   }

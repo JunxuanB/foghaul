@@ -87,5 +87,8 @@ export function checkReveals(state: GameState): void {
     }
     placeIsland(state, r.island, r.anchor);
     say(state, giveHint(state, r.island, r.anchor, r.hint), 'hint');
+    // 自动把新岛设为航行目标（玩家没有别的目标、或者目标已经到过时）
+    const cur = state.player.target ? island(state, state.player.target) : undefined;
+    if (!cur || cur.visited) state.player.target = r.island;
   }
 }

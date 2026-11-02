@@ -24,7 +24,7 @@ export function CraftPanel() {
   const src = canUseStock(isl) ? isl : undefined;
   return (
     <section style={{ fontSize: 15 }}>
-      <p className="note">{src ? t('ui.craftNoteIsland', { isl: t('island.' + src.id) }) : t('ui.craftNote')}</p>
+      {list.length === 0 && <p className="empty">{t('ui.noRecipes')}</p>}
       <ul className="list">
         {list.map((r) => {
           const def = RECIPES[r];
@@ -64,7 +64,7 @@ export function CraftPanel() {
               </div>
               {block && <span className="small tone-al">{tm(block)}</span>}
               <div className="acts" style={{ justifyContent: 'flex-start' }}>
-                <button className={'cmd mini' + (!block ? ' lead' : '')} disabled={!!block} onClick={() => store.dispatch({ t: 'craft', recipe: r, times: 1 })}>
+                <button data-coach={'craft-' + r} className={'cmd mini' + (!block ? ' lead' : '')} disabled={!!block} onClick={() => store.dispatch({ t: 'craft', recipe: r, times: 1 })}>
                   {def.special ? t('ui.make') : t('ui.make1')}
                 </button>
                 {!def.special && (
