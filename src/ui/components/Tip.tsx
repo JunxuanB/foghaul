@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ITEMS, type ItemId } from '../../config/items';
 import { t } from '../../i18n';
 import { activeTip } from '../../sim/tutorial';
@@ -46,6 +47,18 @@ export function ItemName({ id }: { id: ItemId }) {
         {desc}
         {eff && <span style={{ display: 'block', marginTop: 4 }} className="tone-g">{eff}</span>}
         {extra && <span style={{ display: 'block', marginTop: 4, color: 'var(--soft)' }}>{extra}</span>}
+      </span>
+    </span>
+  );
+}
+
+/** 任何名字都可以带说明气泡：建筑、设施、需求等 */
+export function Info({ label, text }: { label: ReactNode; text: string }) {
+  return (
+    <span className="tip" tabIndex={0}>
+      {label}
+      <span className="tipbubble" role="tooltip">
+        <Rich s={text} />
       </span>
     </span>
   );

@@ -11,6 +11,7 @@ import { teachableJobs } from './people';
 import type { Command, GameState, Stock } from './types';
 import { island, stockAdd } from './util';
 import { currentRequest, villageIsland } from './villages';
+import { revealOf } from './reveal';
 
 export class BotError extends Error {}
 
@@ -49,7 +50,18 @@ function needStock(need: Need[], progress: number[]): Stock {
   return out;
 }
 
+/** 目标岛还没出现：先去锚点岛修灯塔 */
+function ensureRevealed(s: GameState, id: string): void {
+  if (island(s, id).revealed) return;
+  const r = revealOf(id);
+  if (!r) throw new BotError('no reveal for ' + id);
+  const anchor = island(s, r.anchor);
+  if (!anchor.buildings.lighthouse) build(s, r.anchor, 'lighthouse');
+  if (!island(s, id).revealed) throw new BotError(`${id} not revealed after lighthouse at ${r.anchor}`);
+}
+
 export function sailTo(s: GameState, id: string): void {
+  ensureRevealed(s, id);
   const target = island(s, id);
   if (s.player.at === id) return;
   if (s.player.at) must(s, { t: 'leave' });
@@ -68,7 +80,7 @@ export function sailTo(s: GameState, id: string): void {
 
 function payable(s: GameState, cost: Stock): void {
   const isl = island(s, s.player.at!);
-  if (!canPay(s, isl, cost)) ensure(s, Object.fromEntries(Object.entries(cost).map(([k, v]) => [k, (v ?? 0) + carried(s, k as ItemId)])) as Stock);
+  if (!canPay(s, isl.owned ? isl : undefined, cost)) ensure(s, Object.fromEntries(Object.entries(cost).map(([k, v]) => [k, (v ?? 0) + carried(s, k as ItemId)])) as Stock);
   void missingCost;
 }
 
@@ -173,7 +185,6 @@ export const STEPS: BotStep[] = [
         { kind: 'drink', n: 3 },
       ]),
   },
-  { id: 'lighthouse1', run: (s) => build(s, 'fisherIsle', 'lighthouse') },
   {
     id: 'grilledFish',
     run: (s) => {
@@ -193,7 +204,6 @@ export const STEPS: BotStep[] = [
   {
     id: 'bread',
     run: (s) => {
-      build(s, 'farmIsle', 'lighthouse');
       villageRequest(s, 'wheat', 'farmer');
       learnAt(s, 'wheat', 'farmer', 'bread');
       dropAt(s, 'farmer', 'farmIsle');
@@ -210,7 +220,6 @@ export const STEPS: BotStep[] = [
   {
     id: 'pilot',
     run: (s) => {
-      build(s, 'herbIsle', 'lighthouse');
       rescueAt(s, 'pilotIsle', [{ kind: 'item', item: 'medkit', n: 1 }]);
       must(s, { t: 'pickUp', personId: personOf(s, 'pilot').id });
       dropAt(s, 'pilot', 'home');

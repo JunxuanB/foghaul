@@ -2,7 +2,7 @@ import { t } from '../../i18n';
 import { Rich } from '../components/Text';
 import { Dialog } from './Dialog';
 
-const SECTIONS = ['goal', 'time', 'map', 'bags', 'craft', 'islands', 'controls'];
+const SECTIONS = ['goal', 'time', 'map', 'bags', 'water', 'craft', 'islands', 'controls'];
 
 /** 玩法说明 */
 export function HelpDialog() {

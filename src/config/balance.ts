@@ -25,12 +25,13 @@ export const BALANCE = {
   map: {
     width: 60,
     height: 36,
-    /** 开局主岛周围可探索的半径 */
-    homeLightRadius: 5,
-    /** 灯塔照亮的半径 */
-    lighthouseRadius: 7,
-    /** 剧情解锁新岛时：岛周围打开的半径，以及连回锚点岛的航道半宽 */
-    pocketRadius: 3.5,
+    /** 开局主岛（自带一座小灯塔）照亮的半径 */
+    homeLightRadius: 10,
+    /** 灯塔照亮的半径，按岛等级 1/2/3；岛升级时灯塔照得更远 */
+    lighthouseRadius: [11, 14, 17],
+    /** 新的主线岛离灯塔所在岛的最小距离（最大为灯塔半径 - 1.5） */
+    placeMinDistance: 6,
+    /** 试飞后打开通往进出口局的航道半宽 */
     corridorHalfWidth: 1,
     /** 进出口局离主岛的距离范围，试飞后照亮的半径 */
     bureauMin: 14,
@@ -40,9 +41,6 @@ export const BALANCE = {
     seenRadius: 2,
     /** 发现岛屿的距离 */
     discoverRadius: 3,
-    /** 新岛离锚点岛的航程（曼哈顿距离） */
-    neighborMin: 10,
-    neighborMax: 15,
     /** 岛与岛之间至少相隔 */
     minSpacing: 7,
     /** 进出口局周围的浓雾半径（修好飞机前不可进入） */
@@ -116,7 +114,11 @@ export const BALANCE = {
 
   // ---------------- 建设 ----------------
   buildings: {
-    lighthouse: { cost: { wood: 30, fish: 6 }, minutes: 120 },
+    /** 灯塔：第 n 座（不含主岛）用第 n 档成本，超出后用最后一档 */
+    lighthouse: {
+      costs: [{ wood: 8 }, { wood: 12 }, { wood: 16, fish: 4 }, { wood: 20, fish: 6 }, { wood: 25, fish: 6 }],
+      minutes: 90,
+    },
     bed: { cost: { wood: 15 }, minutes: 60 },
     depot: { cost: { wood: 10, cup: 4 }, minutes: 60, capBonus: 40 },
     helipad: { cost: { wood: 25, salt: 4 }, minutes: 120 },
@@ -210,7 +212,7 @@ export const BALANCE = {
 
   // ---------------- 存档 ----------------
   save: {
-    key: 'foghaul.save.v2',
+    key: 'foghaul.save.v3',
     autosaveSeconds: 10,
   },
 };

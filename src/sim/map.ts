@@ -23,26 +23,33 @@ export function inFogBank(state: GameState, x: number, y: number): boolean {
 }
 
 export function isLit(state: GameState, x: number, y: number): boolean {
-  return inBounds(state, x, y) && state.lit[y * state.width + x] === 1;
+  return inBounds(state, x, y) && state.lit[y * state.width + x] > 0;
+}
+
+/** 开始一个新的照明事件，返回编号 */
+export function newLightEvent(state: GameState): number {
+  return state.lightSeq++;
 }
 
 export function canEnter(state: GameState, x: number, y: number): boolean {
   return isLit(state, x, y);
 }
 
-function light(state: GameState, x: number, y: number): void {
+function light(state: GameState, x: number, y: number, ev: number): void {
   if (!inBounds(state, x, y) || inFogBank(state, x, y)) return;
-  state.lit[y * state.width + x] = 1;
+  const i = y * state.width + x;
+  if (!state.lit[i]) state.lit[i] = ev;
 }
 
-/** 打开一片圆形海域 */
-export function lightCircle(state: GameState, cx: number, cy: number, r: number): void {
+/** 打开一片圆形海域，返回事件编号 */
+export function lightCircle(state: GameState, cx: number, cy: number, r: number, ev = newLightEvent(state)): number {
   const R = Math.ceil(r);
-  for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) if (euclid(x, y, cx, cy) <= r) light(state, x, y);
+  for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) if (euclid(x, y, cx, cy) <= r) light(state, x, y, ev);
+  return ev;
 }
 
 /** 打开一条连接两点的航道（先横后竖或先竖后横的折线，带宽度） */
-export function lightCorridor(state: GameState, ax: number, ay: number, bx: number, by: number, xFirst: boolean): void {
+export function lightCorridor(state: GameState, ax: number, ay: number, bx: number, by: number, xFirst: boolean, ev = newLightEvent(state)): void {
   const w = M.corridorHalfWidth;
   const pts: [number, number][] = [];
   let x = ax;
@@ -67,7 +74,7 @@ export function lightCorridor(state: GameState, ax: number, ay: number, bx: numb
     stepY();
     stepX();
   }
-  for (const [px, py] of pts) for (let dy = -w; dy <= w; dy++) for (let dx = -w; dx <= w; dx++) light(state, px + dx, py + dy);
+  for (const [px, py] of pts) for (let dy = -w; dy <= w; dy++) for (let dx = -w; dx <= w; dx++) light(state, px + dx, py + dy, ev);
 }
 
 export function seenIdx(state: GameState, x: number, y: number): number {

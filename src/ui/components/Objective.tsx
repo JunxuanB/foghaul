@@ -1,12 +1,14 @@
 import { t } from '../../i18n';
 import { currentObjective } from '../../sim/objectives';
 import { useGame } from '../../store/hooks';
+import { has } from '../../sim/tutorial';
 import { useUi } from '../ui';
 import { M } from './Text';
 
 export function ObjectiveCard() {
   const g = useGame();
   const ui = useUi();
+  if (!has(g, 'goal')) return null;
   const o = currentObjective(g);
   return (
     <div className="box" style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 15 }}>

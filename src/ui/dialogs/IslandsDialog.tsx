@@ -8,6 +8,8 @@ import { M } from '../components/Text';
 import { islandStatus } from '../selectors';
 import { useUi } from '../ui';
 import { Dialog } from './Dialog';
+import { Info } from '../components/Tip';
+import { lightRadius } from '../../sim/worldgen';
 
 export function IslandsDialog() {
   const g = useGame();
@@ -71,10 +73,15 @@ export function IslandsDialog() {
                   )}
                   <dt>{t('ui.buildingsLabel')}</dt>
                   <dd>
-                    {(['lighthouse', 'bed', 'depot', 'helipad'] as const)
-                      .filter((b) => sel.buildings[b])
-                      .map((b) => t('ui.b.' + b))
-                      .join(t('ui.sep')) || t('none')}
+                    {(['lighthouse', 'bed', 'depot', 'helipad'] as const).filter((b) => sel.buildings[b]).length === 0
+                      ? t('none')
+                      : (['lighthouse', 'bed', 'depot', 'helipad'] as const)
+                          .filter((b) => sel.buildings[b])
+                          .map((b) => (
+                            <span key={b} style={{ marginRight: 10 }}>
+                              <Info label={t('ui.b.' + b)} text={t('building.' + b, { r: lightRadius(sel) })} />
+                            </span>
+                          ))}
                   </dd>
                 </>
               )}

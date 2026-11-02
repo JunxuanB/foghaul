@@ -34,7 +34,7 @@ npm run deploy     # 打包并发布到 Cloudflare（需要 wrangler 已登录�
 4. **数值只写在 `src/config/`。** 不要在逻辑里写魔法数字。
 5. **`GameState` 必须可 JSON 序列化。** 改结构时提升 `sim/save.ts` 的 `SAVE_VERSION` 并写迁移。
 6. **随机只用 `sim/rng.ts`**（`rand(state)` 等），保证同一存档可复现。
-7. **改动主线**（岛屿、请求、解锁条件）时同步更新 `src/sim/bot.ts` 的 `STEPS`，自动通关测试会验证。岛屿不是开局生成的，而是按 `REVEALS` 在剧情解锁时放置。
+7. **改动主线**（岛屿、请求、解锁条件）时同步更新 `src/sim/bot.ts` 的 `STEPS`，自动通关测试会验证。岛屿不是开局生成的：剧情条件满足、并且锚点岛修好灯塔后，才按 `REVEALS` 在那座灯塔新照亮的海域里生成。
 8. 颜色只用 `ui/styles/global.css` 里的 CSS 变量，深浅两套主题都要正确。`.isle/.warn/.stop/.fog/.open/.seen/.neutral` 是纯色块背景类，不要另作他用。
 9. **界面功能的显示与否用 `has(state, id)`**（`sim/tutorial.ts`），物品名用 `<ItemName>`；手机布局（≤760px）也要检查。
 
@@ -62,5 +62,5 @@ npm run deploy     # 打包并发布到 Cloudflare（需要 wrangler 已登录�
 - 数值未经真人试玩，只保证流程可通关（脚本玩家会补物资、保命）。
 - 只有一档存档。
 - 地图标签在缩放到边缘时可能被裁切。
-- `SAVE_VERSION = 2`，v1 存档不兼容（地图生成方式变了）。
+- `SAVE_VERSION = 3`，旧存档不兼容（地图改为灯塔探路）。
 - 没有音效和美术资源，界面完全是文字和方格。

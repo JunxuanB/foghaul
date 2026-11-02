@@ -20,7 +20,8 @@ import { M, T } from '../components/Text';
 import { useUi } from '../ui';
 import { useNarrow } from '../hooks';
 import { MobileTabs, SidePanel } from '../components/SidePanel';
-import { TipBox } from '../components/Tip';
+import { Info, TipBox } from '../components/Tip';
+import { lightRadius } from '../../sim/worldgen';
 import { has } from '../../sim/tutorial';
 import { BureauPanel } from './BureauPanel';
 import { HomePanel } from './HomePanel';
@@ -37,7 +38,7 @@ export function IslandScene() {
     if (narrow) ui.setSideTab('isle');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isl.id, narrow]);
-  const owned = canUseStock(isl);
+  const owned = isl.owned;
   const vid = villageOf(isl);
   const tpl = ISLANDS.find((x) => x.id === isl.id)!;
   const need = tpl.rescueNeed ?? tpl.recruitNeed;
@@ -51,7 +52,7 @@ export function IslandScene() {
   if (owned && !home) sub.push(t('ui.level', { n: isl.level }));
   if ((owned && (!home || has(g, 'people'))) || vid) sub.push(t('ui.pop', { n: headcountOf(g, isl), cap: peopleCap(isl) >= 99 ? '∞' : peopleCap(isl) }));
   const showStock = owned && (!home || has(g, 'build') || Object.keys(isl.stock).length > 0);
-  const showBuild = owned && (!home || has(g, 'build'));
+  const showBuild = (owned && (!home || has(g, 'build'))) || (!owned && isl.kind !== 'bureau' && (has(g, 'build') || g.lighthouseAsked.includes(isl.id)));
 
   const main = (
     <>
@@ -192,7 +193,7 @@ function FacilitySection({ isl }: { isl: Island }) {
   const fac2 = fac?.kind === 'process' ? RECIPES[fac.recipe] : null;
   return (
     <section>
-      <h3 className="h3">{t('ui.facility')}</h3>
+      <h3 className="h3"><Info label={t('ui.facility')} text={t('info.facility')} /></h3>
       <ul className="list">
         <li className="row">
           <span className="nm"><M m={facilityMsg(fac)} /></span>
@@ -210,12 +211,12 @@ function FacilitySection({ isl }: { isl: Island }) {
           </li>
         )}
         <li className="row">
-          <span className="nm">{t('ui.demand')}</span>
+          <span className="nm"><Info label={t('ui.demand')} text={t('info.demand')} /></span>
           <span className="meta">{t(demandKey(isl))}</span>
         </li>
         {isl.level < 3 && (
           <li className="row">
-            <span className="nm">{t('ui.toNextLevel')}</span>
+            <span className="nm"><Info label={t('ui.toNextLevel')} text={t('info.level', { r1: BALANCE.map.lighthouseRadius[1], r2: BALANCE.map.lighthouseRadius[2] })} /></span>
             <span className="meta">{t('ui.mealStreak', { n: isl.mealStreak, total: BALANCE.economy.mealsToUpgrade })}</span>
           </li>
         )}
@@ -246,7 +247,7 @@ function PeopleSection({ isl }: { isl: Island }) {
   if (!people.length && (!owned || (isl.kind === 'home' && !has(g, 'people')))) return null;
   return (
     <section>
-      <h3 className="h3">{t('ui.peopleHere')}</h3>
+      <h3 className="h3"><Info label={t('ui.peopleHere')} text={t('info.people')} /></h3>
       {!people.length && <p className="empty">{t('ui.nobodyHere')}</p>}
       <ul className="list">
         {people.map((p) => {
@@ -318,18 +319,23 @@ function StockSection({ isl }: { isl: Island }) {
 function BuildSection({ isl }: { isl: Island }) {
   const g = useGame();
   const store = useStore();
-  const rows: { key: string; name: string; done: boolean; cost: ReturnType<typeof buildCost>; onClick: () => void; extra?: string }[] = [];
-  if (isl.kind !== 'bureau') {
+  const rows: { key: string; name: string; done: boolean; cost: ReturnType<typeof buildCost>; onClick: () => void; desc: string }[] = [];
+  const radius = lightRadius(isl);
+  const owned = isl.owned;
+  const src = owned ? isl : undefined;
+  if (!owned) {
+    rows.push({ key: 'lighthouse', name: t('ui.b.lighthouse'), done: isl.buildings.lighthouse, cost: buildCost(g, 'lighthouse'), onClick: () => store.dispatch({ t: 'build', what: 'lighthouse' }), desc: t('building.lighthouse', { r: radius }) });
+  } else if (isl.kind !== 'bureau') {
     if (isl.kind !== 'home')
-      rows.push({ key: 'lighthouse', name: t('ui.b.lighthouse'), done: isl.buildings.lighthouse, cost: buildCost(g, 'lighthouse'), onClick: () => store.dispatch({ t: 'build', what: 'lighthouse' }) });
-    rows.push({ key: 'bed', name: t('ui.b.bed'), done: isl.buildings.bed, cost: buildCost(g, 'bed'), onClick: () => store.dispatch({ t: 'build', what: 'bed' }) });
+      rows.push({ key: 'lighthouse', name: t('ui.b.lighthouse'), done: isl.buildings.lighthouse, cost: buildCost(g, 'lighthouse'), onClick: () => store.dispatch({ t: 'build', what: 'lighthouse' }), desc: t('building.lighthouse', { r: radius }) });
+    rows.push({ key: 'bed', name: t('ui.b.bed'), done: isl.buildings.bed, cost: buildCost(g, 'bed'), onClick: () => store.dispatch({ t: 'build', what: 'bed' }), desc: t('building.bed') });
     if (isl.kind !== 'home')
-      rows.push({ key: 'depot', name: t('ui.b.depot'), done: isl.buildings.depot, cost: buildCost(g, 'depot'), onClick: () => store.dispatch({ t: 'build', what: 'depot' }) });
+      rows.push({ key: 'depot', name: t('ui.b.depot'), done: isl.buildings.depot, cost: buildCost(g, 'depot'), onClick: () => store.dispatch({ t: 'build', what: 'depot' }), desc: t('building.depot') });
     if (g.flags.planeRepaired)
-      rows.push({ key: 'helipad', name: t('ui.b.helipad'), done: isl.buildings.helipad, cost: buildCost(g, 'helipad'), onClick: () => store.dispatch({ t: 'build', what: 'helipad' }) });
+      rows.push({ key: 'helipad', name: t('ui.b.helipad'), done: isl.buildings.helipad, cost: buildCost(g, 'helipad'), onClick: () => store.dispatch({ t: 'build', what: 'helipad' }), desc: t('building.helipad') });
     if (isl.kind === 'home' && g.player.hasRaft) {
       const c = buildCost(g, 'holdUpgrade');
-      rows.push({ key: 'hold', name: t('ui.b.hold', { cap: g.player.holdCap }), done: c === null, cost: c, onClick: () => store.dispatch({ t: 'build', what: 'holdUpgrade' }) });
+      rows.push({ key: 'hold', name: t('ui.b.hold', { cap: g.player.holdCap }), done: c === null, cost: c, onClick: () => store.dispatch({ t: 'build', what: 'holdUpgrade' }), desc: t('building.hold') });
     }
   }
   const eng = presentPeople(g).find((p) => p.role === 'engineer');
@@ -341,17 +347,21 @@ function BuildSection({ isl }: { isl: Island }) {
         {rows.map((r) => (
           <li key={r.key} className="row">
             <span className="nm">
-              {r.name}
-              {!r.done && r.cost && (
-                <span className="small" style={{ display: 'block' }}>
-                  <T k="ui.costShort" p={{ cost: stockP(r.cost) }} />
-                </span>
-              )}
+              <Info label={r.name} text={r.desc} />
+              <span className="small" style={{ display: 'block' }}>
+                {r.desc}
+                {!r.done && r.cost && (
+                  <>
+                    {' '}
+                    <T k="ui.costShort" p={{ cost: stockP(r.cost) }} />
+                  </>
+                )}
+              </span>
             </span>
             <span className="meta">{r.done ? t('ui.built') : ''}</span>
             <span className="acts">
               {!r.done && r.cost && (
-                <button className="cmd mini" disabled={!canPay(g, isl, r.cost)} onClick={r.onClick}>{t('ui.doBuild')}</button>
+                <button className={'cmd mini' + (r.key === 'lighthouse' && g.lighthouseAsked.includes(isl.id) && canPay(g, src, r.cost) ? ' lead' : '')} disabled={!canPay(g, src, r.cost)} onClick={r.onClick}>{t('ui.doBuild')}</button>
               )}
             </span>
           </li>
@@ -359,9 +369,9 @@ function BuildSection({ isl }: { isl: Island }) {
         {canRaft && (
           <li className="row">
             <span className="nm">
-              {t('ui.b.transportRaft', { n: g.transport.rafts })}
+              <Info label={t('ui.b.transportRaft', { n: g.transport.rafts })} text={t('building.transportRaft')} />
               <span className="small" style={{ display: 'block' }}>
-                <T k="ui.costShort" p={{ cost: stockP(RECIPES.transportRaft.inputs) }} />
+                {t('building.transportRaft')} <T k="ui.costShort" p={{ cost: stockP(RECIPES.transportRaft.inputs) }} />
               </span>
             </span>
             <span className="acts">

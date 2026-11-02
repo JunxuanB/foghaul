@@ -21,9 +21,10 @@
 
 | 文件 | 覆盖内容 |
 | --- | --- |
-| `tests/worldgen.test.ts` | 开局只放主岛和第一座岛；200 个种子把整条解锁链都放出来，检查边界、可达、间距 |
+| `tests/worldgen.test.ts` | 开局只放主岛和第一座岛；200 个种子把整条解锁链都放出来，检查每座岛都落在锚点灯塔新照亮的海域、可达、间距 |
 | `tests/opening.test.ts` | 造木筏、救工程师和伐木工、一次只解锁一座岛；采集进背包、功能逐步出现；灯塔才打开村落的迷雾；夜间掉血；死亡丢货和重生；存档往返；日志双语渲染 |
 | `tests/i18n.test.ts` | 两个词典键一致、占位符一致；源码里字面量键都存在 |
+| `tests/realistic.test.ts` | **不作弊**的开局试玩：4 个种子，按普通玩家的思路（饿了吃、渴了喝、天黑回家睡）从造木筏玩到救出伐木工并修好第二座灯塔，要求不死、第 4 天前完成。用来检查开局数值 |
 | `tests/playthrough.test.ts` | 用脚本玩家在 4 个种子上从新游戏打到汇报工作，并检查每步对应的目标已完成、全部日志可渲染 |
 | `tests/helpers.ts` | `must`、`sailTo`、`homeGather`、`keepAlive` 等测试工具 |
 
@@ -80,7 +81,7 @@
 ### 新增岛屿
 
 1. `config/world.ts` 的 `ISLANDS`：加岛的模板（`kind`、群系、救援或招募需求）。
-2. `config/world.ts` 的 `REVEALS`：决定它**什么时候出现、在谁附近**——`anchor`（锚点岛）、`from`（谁告诉你方向）、`hint`（提示文字键，模板里用 `{where}`）、`place`（放置条件）、可选的 `open`（打开迷雾的条件，例如某座灯塔）。新条件类型要在 `RevealCond` 和 `sim/reveal.ts` 的 `condMet` 里实现。
+2. `config/world.ts` 的 `REVEALS`：决定它**什么时候出现、在谁附近**——`anchor`（锚点岛：要在这里修灯塔，新岛会出现在这座灯塔新照亮的海域里；每座锚点最好只用一次）、`hint`（提示文字键，模板里用 `{where}`，会在灯塔亮起后说出来）、`when`（剧情条件）。新条件类型要在 `RevealCond` 和 `sim/reveal.ts` 的 `condMet` 里实现。
 3. 词典加 `island.<id>`、`island.<id>.intro` 和提示文字。
 4. 乘客岛：需要对应的 `Role`，获救文字 `rescue.<role>.thanks/teach`。
 5. 村落：还要在 `VILLAGES` 里定义，并在 `sim/villages.ts` 的 `ISLAND_OF` 里登记岛 id。

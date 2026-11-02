@@ -12,11 +12,11 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const [page, setPage] = useState<'story' | 'quick'>('story');
   return (
     <div className="screen">
-      <div className="screen-in">
+      <div className="screen-in screen-fixed">
         {page === 'story' ? (
           <>
             <p className="small" style={{ margin: 0, letterSpacing: '0.2em' }}>{t('intro.label')}</p>
-            <div className="story" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="story" style={{ flex: '1 1 auto', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
               {Array.from({ length: shown }, (_, i) => (
                 <p key={i} style={{ color: i === shown - 1 ? 'var(--ink)' : 'var(--soft)' }}>
                   <Rich s={t('intro.' + i)} />
@@ -33,13 +33,13 @@ export function Intro({ onDone }: { onDone: () => void }) {
         ) : (
           <>
             <h2 style={{ margin: 0, fontSize: 22 }}>{t('intro.quickTitle')}</h2>
-            <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 16, lineHeight: 1.7 }}>
+            <ul style={{ flex: '1 1 auto', overflowY: 'auto', margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 16, lineHeight: 1.7 }}>
               {Array.from({ length: QUICK }, (_, i) => (
                 <li key={i}><Rich s={t('intro.quick.' + i)} /></li>
               ))}
             </ul>
             <p className="small" style={{ margin: 0 }}>{t('intro.helpLater')}</p>
-            <button className="cmd lead" style={{ alignSelf: 'flex-end' }} autoFocus onClick={onDone}>
+            <button className="cmd lead" style={{ alignSelf: 'flex-end', marginTop: 'auto' }} autoFocus onClick={onDone}>
               {t('intro.start')}
             </button>
           </>

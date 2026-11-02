@@ -25,10 +25,10 @@ export interface IslandTemplate {
 }
 
 /**
- * 剧情解锁顺序：一次只开放少量岛屿。
- * - place：满足条件时在锚点岛附近放置这座岛，并由 hint 键给出方向提示（{where}）。
- * - open：满足条件时打开迷雾（岛周围 + 连回锚点的航道）。省略时与 place 相同。
- * 条件的含义见 sim/reveal.ts 的 CONDITIONS。
+ * 剧情解锁顺序：一次只开放一座岛。
+ * 条件 when 满足、并且锚点岛（anchor）修好了灯塔时，下一座岛才会在
+ * 锚点岛灯塔新照亮、玩家还没去过的海域里生成，同时给出方向提示（hint，模板里用 {where}）。
+ * 主岛开局自带一座小灯塔。条件的含义见 sim/reveal.ts 的 condMet。
  */
 export type RevealCond =
   | 'start'
@@ -36,13 +36,10 @@ export type RevealCond =
   | 'lumberjack'
   | 'firstTraining'
   | 'fisher'
-  | 'lighthouse:fisherIsle'
   | 'learned:grilledFish'
   | 'farmer'
-  | 'lighthouse:farmIsle'
   | 'learned:bread'
   | 'doctor'
-  | 'lighthouse:herbIsle'
   | 'pilotHome'
   | 'learned:transportRaft'
   | 'firstRoute'
@@ -51,27 +48,24 @@ export type RevealCond =
 export interface RevealDef {
   island: string;
   anchor: string;
-  /** 给出提示的岛（方向从这里算） */
-  from: string;
   hint: string;
-  place: RevealCond;
-  open?: RevealCond;
+  when: RevealCond;
 }
 
 export const REVEALS: RevealDef[] = [
-  { island: 'stoneIsle', anchor: 'home', from: 'home', hint: 'hint.start', place: 'start' },
-  { island: 'forestIsle', anchor: 'home', from: 'stoneIsle', hint: 'rescue.engineer.hint', place: 'engineer' },
-  { island: 'nativeA', anchor: 'home', from: 'forestIsle', hint: 'rescue.lumberjack.hint', place: 'lumberjack' },
-  { island: 'fisherIsle', anchor: 'home', from: 'nativeA', hint: 'reveal.fisherIsle', place: 'firstTraining' },
-  { island: 'village1', anchor: 'fisherIsle', from: 'fisherIsle', hint: 'rescue.fisher.hint', place: 'fisher', open: 'lighthouse:fisherIsle' },
-  { island: 'farmIsle', anchor: 'village1', from: 'village1', hint: 'reveal.farmIsle', place: 'learned:grilledFish' },
-  { island: 'village2', anchor: 'farmIsle', from: 'farmIsle', hint: 'rescue.farmer.hint', place: 'farmer', open: 'lighthouse:farmIsle' },
-  { island: 'herbIsle', anchor: 'village2', from: 'village2', hint: 'reveal.herbIsle', place: 'learned:bread' },
-  { island: 'pilotIsle', anchor: 'herbIsle', from: 'herbIsle', hint: 'rescue.doctor.hint', place: 'doctor', open: 'lighthouse:herbIsle' },
-  { island: 'village3', anchor: 'home', from: 'home', hint: 'reveal.village3', place: 'pilotHome' },
-  { island: 'laborVillage', anchor: 'village3', from: 'village3', hint: 'reveal.laborVillage', place: 'learned:transportRaft' },
-  { island: 'nativeB', anchor: 'home', from: 'home', hint: 'reveal.nativeB', place: 'firstRoute' },
-  { island: 'nativeC', anchor: 'fisherIsle', from: 'nativeB', hint: 'reveal.nativeC', place: 'recruited:nativeB' },
+  { island: 'stoneIsle', anchor: 'home', hint: 'hint.start', when: 'start' },
+  { island: 'forestIsle', anchor: 'stoneIsle', hint: 'rescue.engineer.hint', when: 'engineer' },
+  { island: 'nativeA', anchor: 'forestIsle', hint: 'rescue.lumberjack.hint', when: 'lumberjack' },
+  { island: 'fisherIsle', anchor: 'nativeA', hint: 'reveal.fisherIsle', when: 'firstTraining' },
+  { island: 'village1', anchor: 'fisherIsle', hint: 'rescue.fisher.hint', when: 'fisher' },
+  { island: 'farmIsle', anchor: 'village1', hint: 'reveal.farmIsle', when: 'learned:grilledFish' },
+  { island: 'village2', anchor: 'farmIsle', hint: 'rescue.farmer.hint', when: 'farmer' },
+  { island: 'herbIsle', anchor: 'village2', hint: 'reveal.herbIsle', when: 'learned:bread' },
+  { island: 'pilotIsle', anchor: 'herbIsle', hint: 'rescue.doctor.hint', when: 'doctor' },
+  { island: 'village3', anchor: 'pilotIsle', hint: 'reveal.village3', when: 'pilotHome' },
+  { island: 'laborVillage', anchor: 'village3', hint: 'reveal.laborVillage', when: 'learned:transportRaft' },
+  { island: 'nativeB', anchor: 'laborVillage', hint: 'reveal.nativeB', when: 'firstRoute' },
+  { island: 'nativeC', anchor: 'nativeB', hint: 'reveal.nativeC', when: 'recruited:nativeB' },
 ];
 
 export const ISLANDS: IslandTemplate[] = [

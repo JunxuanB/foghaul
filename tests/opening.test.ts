@@ -23,18 +23,18 @@ describe('opening', () => {
     expect(eng.active).toBe(true);
     expect(s.player.recipes).toContain('distill');
     expect(island(s, 'stoneIsle').owned).toBe(true);
-    expect(s.hints.forestIsle).toBeTruthy();
-    // 一次只开放一座新岛
+    // 要先在石头岛修灯塔，伐木工的岛才会出现
+    expect(island(s, 'forestIsle').revealed).toBe(false);
+    s.player.pack = { ...s.player.pack, wood: 8 };
+    must(s, { t: 'build', what: 'lighthouse' });
     expect(island(s, 'forestIsle').revealed).toBe(true);
     expect(island(s, 'nativeA').revealed).toBe(false);
-    expect(island(s, 'fisherIsle').revealed).toBe(false);
     // 伐木工要 4 份食物
     sailTo(s, 'forestIsle');
     must(s, { t: 'deliver' });
     expect(s.people.find((p) => p.role === 'lumberjack')!.active).toBe(true);
     expect(s.player.recipes).toContain('bottledWater');
-    expect(island(s, 'nativeA').revealed).toBe(true);
-    expect(island(s, 'fisherIsle').revealed).toBe(false);
+    expect(island(s, 'nativeA').revealed).toBe(false);
   });
 
   it('crafts anywhere: cups at sea, but distilling needs a network island', async () => {
@@ -61,16 +61,21 @@ describe('opening', () => {
     expect(s.player.pack.wood).toBe(2);
   });
 
-  it('lighthouse-gated islands are placed with a hint but stay in fog until the lighthouse', async () => {
+  it('the next island only appears after a lighthouse is built where you are', async () => {
     const { runUntil } = await import('../src/sim/bot');
-    const s = runUntil(31, 'fisher');
-    const v = island(s, 'village1');
-    expect(v.revealed).toBe(true);
-    expect(v.opened).toBe(false);
-    expect(s.hints.village1).toBeTruthy();
-    const { STEPS } = await import('../src/sim/bot');
-    STEPS.find((x) => x.id === 'lighthouse1')!.run(s);
-    expect(island(s, 'village1').opened).toBe(true);
+    const s = runUntil(31, 'engineer');
+    expect(island(s, 'forestIsle').revealed).toBe(false);
+    const st = island(s, 'stoneIsle');
+    expect(s.player.at).toBe('stoneIsle');
+    s.player.pack = { wood: 20 };
+    const litBefore = s.lit.filter((v) => v > 0).length;
+    must(s, { t: 'build', what: 'lighthouse' });
+    expect(s.lit.filter((v) => v > 0).length).toBeGreaterThan(litBefore);
+    const f = island(s, 'forestIsle');
+    expect(f.revealed).toBe(true);
+    // 落在石头岛灯塔新照亮的海域里
+    expect(st.lightEvents).toContain(s.lit[f.y * s.width + f.x]);
+    expect(s.hints.forestIsle).toBeTruthy();
   });
 
   it('time advances survival and night damage at sea', () => {

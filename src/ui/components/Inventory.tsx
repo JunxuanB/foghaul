@@ -63,6 +63,17 @@ export function useItemActs() {
         out.push({ label: t('ui.unload'), onClick: () => store.dispatch({ t: 'transfer', item: id, from, to: 'stock', n }) });
       if ((from === 'pack' || from === 'hold') && bureau && def.trade > 0)
         out.push({ label: t('ui.export'), lead: true, onClick: () => store.dispatch({ t: 'export', item: id, from, n }) });
+      if (from === 'stock' && id === 'water' && g.player.recipes.includes('bottledWater')) {
+        const cups = (isl?.stock.cup ?? 0) + (g.player.pack.cup ?? 0) + (g.player.hold.cup ?? 0);
+        const k = Math.min(n, cups, 10);
+        out.push({
+          label: t('ui.fillCups', { n: k }),
+          lead: k > 0,
+          disabled: k <= 0,
+          title: k > 0 ? t('ui.fillCupsHint') : t('ui.fillCupsNone'),
+          onClick: () => store.dispatch({ t: 'craft', recipe: 'bottledWater', times: k }),
+        });
+      }
       if (from === 'stock' && def.portable) {
         if (g.player.hasRaft) {
           out.push({ label: t('ui.load1'), onClick: () => store.dispatch({ t: 'transfer', item: id, from, to: 'hold', n: 1 }) });
@@ -81,6 +92,7 @@ export function Inventory() {
   const p = g.player;
   const isl = here(g);
   const aboard = p.aboard.map((id) => g.people.find((x) => x.id === id)!).filter(Boolean);
+  if (!has(g, 'goal') && stockLoad(p.pack) === 0) return null;
   return (
     <aside style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <section>

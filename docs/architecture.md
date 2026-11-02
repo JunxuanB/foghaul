@@ -44,10 +44,11 @@ useGame()（useSyncExternalStore）→ 整棵 React 树重渲染，读 store.sta
 | --- | --- |
 | `seed` / `rng` | 地图种子；`rng` 是随机数生成器的当前状态，随存档保存，保证可复现 |
 | `time` | 从第 1 天 00:00 起的游戏分钟（浮点） |
-| `islands[]` | 按 `config/world.ts` 的 `ISLANDS` 顺序排列；`id` 稳定，`islands[0]` 是主岛。`revealed`（已放上地图，之前坐标为 -1）、`opened`（迷雾已为它打开）、`discovered`（玩家看到过） |
+| `islands[]` | 按 `config/world.ts` 的 `ISLANDS` 顺序排列；`id` 稳定，`islands[0]` 是主岛。`revealed`（已放上地图，之前坐标为 -1）、`lightEvents`（这座岛的灯塔照亮海域的事件编号）、`discovered`（玩家看到过） |
 | `people[]` | 乘客（`p_<role>`）和原住民（`n<序号>`）；`loc` 表示在岛上、在玩家木筏上或在运输线上 |
 | `seen[]` | 60×36 的 0/1 数组，已探索的海面 |
-| `lit[]` | 60×36 的 0/1 数组，可探索海域（迷雾以外）。由剧情解锁、灯塔、试飞逐步打开，见 `sim/reveal.ts` |
+| `lit[]` | 60×36 数组，每格记录第一次照亮它的照明事件编号，0 为迷雾。只有灯塔（含主岛自带的）和试飞会照亮海域；`lightSeq` 是下一个事件编号；`lighthouseAsked` 记录已经提示过要修灯塔的岛 |
+| `newRecipes[]` | 刚学会、还没在制作页看过的配方（制作标签显示“新”） |
 | `unlocks[]` | 已经出现的界面功能（新手引导逐步展示），见 `sim/tutorial.ts` |
 | `tips[]` | 玩家已关闭的情境提示 |
 | `player` | 位置、`at`（靠岸的岛 id，null 表示在海上）、生命/水/食物、背包、货舱、随船人员、经验、武器、已会的配方、航行目标 |
@@ -110,8 +111,8 @@ type Param = string | number | Msg | { stock: Stock } | { list: Msg[] };
 
 ## 存档（sim/save.ts）
 
-- 键：`foghaul.save.v2`（`BALANCE.save.key`），值是整个 `GameState` 的 JSON。
-- `SAVE_VERSION = 2`（v2 改为逐步生成地图，与 v1 不兼容，v1 存档会被忽略）。读档时 `migrate()` 只接受同版本，否则返回 null（视为新游戏）。**修改 `GameState` 结构时要提升版本号并在 `migrate` 里写迁移**，否则玩家的旧存档会被丢弃。
+- 键：`foghaul.save.v3`（`BALANCE.save.key`），值是整个 `GameState` 的 JSON。
+- `SAVE_VERSION = 3`（v3 改为灯塔探路，与旧版不兼容，旧存档会被忽略）。读档时 `migrate()` 只接受同版本，否则返回 null（视为新游戏）。**修改 `GameState` 结构时要提升版本号并在 `migrate` 里写迁移**，否则玩家的旧存档会被丢弃。
 - GameStore 每 10 秒自动存档，页面隐藏和关闭时也存。设置弹窗提供导出 / 导入 JSON 和新游戏。
 
 语言（`foghaul.lang`）和主题（`foghaul.theme`）各自单独存在 localStorage 里，不属于存档。

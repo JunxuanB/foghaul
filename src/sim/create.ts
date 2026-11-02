@@ -6,9 +6,8 @@ import { say } from './log';
 import { m, roleM } from './msg';
 import type { GameState, Island, Person, VillageState } from './types';
 import { placeHomeAndBureau } from './worldgen';
-import { checkReveals } from './reveal';
+import { checkReveals, lightFrom } from './reveal';
 import { updateUnlocks } from './tutorial';
-import { lightCircle } from './map';
 
 export function newSeed(): number {
   return BALANCE.map.fixedSeed ?? Math.floor(Math.random() * 2 ** 31);
@@ -28,7 +27,7 @@ export function createGame(seed: number = newSeed()): GameState {
       rot: 0,
       biome,
       revealed: t.kind === 'home',
-      opened: t.kind === 'home',
+      lightEvents: [],
       discovered: t.kind === 'home',
       visited: t.kind === 'home',
       owned: t.kind === 'home',
@@ -39,7 +38,7 @@ export function createGame(seed: number = newSeed()): GameState {
       lastMeal: null,
       lastMealNote: '',
       stock: {},
-      buildings: { lighthouse: false, bed: t.kind === 'home', depot: false, helipad: false },
+      buildings: { lighthouse: t.kind === 'home', bed: t.kind === 'home', depot: false, helipad: false },
       sleepy: false,
       prodAcc: 0,
       workNote: '',
@@ -78,7 +77,7 @@ export function createGame(seed: number = newSeed()): GameState {
 
   const S = BALANCE.survival;
   const state: GameState = {
-    version: 2,
+    version: 3,
     seed,
     rng: seed ^ 0x5bd1e995,
     time: BALANCE.time.startMinute,
@@ -88,8 +87,11 @@ export function createGame(seed: number = newSeed()): GameState {
     people,
     seen: new Array(BALANCE.map.width * BALANCE.map.height).fill(0),
     lit: new Array(BALANCE.map.width * BALANCE.map.height).fill(0),
+    lightSeq: 1,
+    lighthouseAsked: [],
     unlocks: [],
     tips: [],
+    newRecipes: [],
     player: {
       x: home.x,
       y: home.y,
@@ -139,7 +141,7 @@ export function createGame(seed: number = newSeed()): GameState {
     cutscene: null,
     nextPersonNo: no,
   };
-  lightCircle(state, home.x, home.y, BALANCE.map.homeLightRadius);
+  lightFrom(state, home);
   look(state);
   for (let i = 0; i < OPENING_LINES; i++) say(state, 'opening.' + i);
   checkReveals(state);

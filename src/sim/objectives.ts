@@ -7,6 +7,8 @@ import type { Role } from '../config/recipes';
 import { ISLANDS } from '../config/world';
 import { partsCollected } from './endgame';
 import { carried, needMsg } from './inventory';
+import { needsLighthouse } from './reveal';
+import { buildCost } from './actions';
 import { islandM, itemM, m, stockP, type Msg } from './msg';
 import { roleOf } from './people';
 import type { GameState } from './types';
@@ -41,6 +43,8 @@ function hintOr(state: GameState, id: string, fallback: string): Msg {
     }
     return m('obj.found', { isl: islandM(id) });
   }
+  const lh = needsLighthouse(state, id);
+  if (lh) return m('obj.needLighthouse', { isl: islandM(lh), cost: stockP(buildCost(state, 'lighthouse') ?? {}) });
   return state.hints[id] ?? m(fallback);
 }
 
@@ -68,11 +72,6 @@ export function objectives(state: GameState): Objective[] {
       state.flags.firstTraining,
     ),
     o('fisher', hintOr(state, 'fisherIsle', 'obj.fisher.f'), rescued(state, 'fisher')),
-    o(
-      'lighthouse1',
-      m('obj.lighthouse1.d', { cost: stockP(BALANCE.buildings.lighthouse.cost) }),
-      !!findIsland(state, 'fisherIsle')?.buildings.lighthouse,
-    ),
     o(
       'grilledFish',
       findIsland(state, 'village1')?.discovered ? m('obj.grilledFish.d') : hintOr(state, 'village1', 'obj.grilledFish.f'),

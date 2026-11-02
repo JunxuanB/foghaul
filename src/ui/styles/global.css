@@ -125,6 +125,8 @@ input.num { width: 80px; }
 .screen-in { width: min(640px, 100%); display: flex; flex-direction: column; gap: 22px; }
 .screen h1 { margin: 0; font-size: clamp(32px, 8vw, 48px); letter-spacing: .2em; }
 .story p { margin: 0; font-size: 18px; line-height: 1.8; }
+/* 开场剧情、过场：固定高度，按钮位置不随文字变多而移动 */
+.screen-fixed { height: min(600px, 86vh); }
 
 /* 手机 */
 @media (max-width: 760px) {

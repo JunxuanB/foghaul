@@ -36,8 +36,8 @@ export interface Island {
   biome: Biome | null;
   /** 已被剧情解锁并放上地图（未解锁的岛坐标无意义） */
   revealed: boolean;
-  /** 迷雾已为它打开 */
-  opened: boolean;
+  /** 这座岛的灯塔每次照亮新海域时的事件编号（见 state.lit） */
+  lightEvents: number[];
   discovered: boolean;
   visited: boolean;
   /** 已纳入网络（主岛、获救乘客岛、已招募原住民岛） */
@@ -163,12 +163,18 @@ export interface GameState {
   islands: Island[];
   people: Person[];
   seen: number[];
-  /** 可探索海域（0/1 位图），由剧情解锁、灯塔、试飞逐步打开 */
+  /** 可探索海域：每格记录“第一次照亮它的事件编号”，0 表示迷雾。由灯塔和试飞逐步打开 */
   lit: number[];
+  /** 下一个照明事件编号 */
+  lightSeq: number;
+  /** 已经提示过“要修灯塔才能找到下一座岛”的岛 */
+  lighthouseAsked: string[];
   /** 已经出现过的界面功能（新手引导逐步展示） */
   unlocks: string[];
   /** 已关闭的提示 */
   tips: string[];
+  /** 刚学会、还没在制作页看过的配方 */
+  newRecipes: RecipeId[];
   player: PlayerState;
   villages: Record<VillageId, VillageState>;
   flags: {
@@ -242,7 +248,8 @@ export type Command =
   | { t: 'buyUpgrade'; kind: 'speed' | 'storage' | 'output' }
   | { t: 'fly'; to: string }
   | { t: 'toggleTwoStep' }
-  | { t: 'dismissTip'; id: string };
+  | { t: 'dismissTip'; id: string }
+  | { t: 'seenRecipes' };
 
 export interface Result {
   ok: boolean;

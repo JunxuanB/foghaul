@@ -61,7 +61,10 @@ export function HomePanel() {
             <span>
               <T k={canRaft ? 'ui.raftReady' : 'ui.raftNeed'} p={{ have: Math.min(wood, raftWood), n: raftWood }} />
             </span>
-            <button className={'cmd' + (canRaft ? ' lead' : '')} onClick={() => ui.setSideTab('craft')}>
+            <button className={'cmd' + (canRaft ? ' lead' : '')} onClick={() => {
+                ui.setSideTab('craft');
+                if (g.newRecipes.length) store.dispatch({ t: 'seenRecipes' });
+              }}>
               {t('ui.openCraft')}
             </button>
           </div>

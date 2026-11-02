@@ -6,6 +6,7 @@ import { bureauHourly } from './endgame';
 import { say } from './log';
 import { islandM, m, recipeM, stockP } from './msg';
 import { tickTransport } from './transport';
+import { learnRecipe } from './progression';
 import { checkReveals } from './reveal';
 import { updateUnlocks } from './tutorial';
 import type { GameState } from './types';
@@ -55,7 +56,7 @@ function finishLearning(state: GameState): boolean {
     const { recipe, village } = p.learning;
     p.learning = null;
     if (!p.recipes.includes(recipe)) p.recipes.push(recipe);
-    if (!state.player.recipes.includes(recipe)) state.player.recipes.push(recipe);
+    learnRecipe(state, recipe);
     const v = state.villages[village];
     v.pendingRecipes = v.pendingRecipes.filter((r) => r !== recipe);
     say(state, 'log.learned', { who: p.name, recipe: recipeM(recipe), village: m('village.' + village) }, 'got');

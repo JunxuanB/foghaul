@@ -67,9 +67,11 @@ export function giveToPlayer(state: GameState, item: ItemId, n: number, prefer: 
     stockAdd(state.player.pack, item, n);
     return 0;
   }
+  // 装不下的只会放进你网络里的岛的仓库，绝不会塞进别人的岛
+  const own = findIsland(state, state.player.at);
+  const overflowTo = own && own.owned ? own : undefined;
   if (!def.portable) {
-    const isl = findIsland(state, state.player.at);
-    if (isl) return n - addToStock(state, isl, item, n);
+    if (overflowTo) return n - addToStock(state, overflowTo, item, n);
     return n;
   }
   for (const w of order) {
@@ -80,10 +82,7 @@ export function giveToPlayer(state: GameState, item: ItemId, n: number, prefer: 
       left -= k;
     }
   }
-  if (left > 0) {
-    const isl = findIsland(state, state.player.at);
-    if (isl) left -= addToStock(state, isl, item, left);
-  }
+  if (left > 0 && overflowTo) left -= addToStock(state, overflowTo, item, left);
   return left;
 }
 

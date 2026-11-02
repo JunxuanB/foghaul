@@ -34,7 +34,10 @@ export function CraftPanel() {
           return (
             <li key={r} className="row" style={{ alignItems: 'flex-start', padding: '10px 0', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', width: '100%', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                <strong>{t('recipe.' + r)}</strong>
+                <strong>
+                  {t('recipe.' + r)}
+                  {g.newRecipes.includes(r) && <span className="tone-g" style={{ marginLeft: 8, fontSize: 13 }}>{t('ui.newTag')}</span>}
+                </strong>
                 <span className="small">{t('ui.minutes', { n: def.manualMinutes })}</span>
               </div>
               <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', color: 'var(--ink)' }}>

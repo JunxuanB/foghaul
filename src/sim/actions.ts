@@ -22,12 +22,12 @@ import {
   whereStock,
 } from './inventory';
 import { canEnter, lightCircle, lightCorridor, look } from './map';
-import { checkReveals } from './reveal';
+import { checkReveals, lightFrom } from './reveal';
 import { updateUnlocks } from './tutorial';
 import { fail, OK, say } from './log';
 import { islandM, itemM, m, recipeM, roleM, stockP, type Msg } from './msg';
 import { headcountOf, isHungry, presentPeople, sameJob, teachableJobs } from './people';
-import { gainPlayerXp, playerLevel } from './progression';
+import { gainPlayerXp, learnRecipe, playerLevel } from './progression';
 import { chance } from './rng';
 import { onMove, takeCrate } from './seaEvents';
 import { createRoute, deleteRoute, freeRafts, priorityUnlocked, reserveUnlocked, routeEndpoints, targetUnlocked } from './transport';
@@ -303,8 +303,7 @@ function syncBasicRecipes(state: GameState): void {
   const pl = state.player;
   const eng = state.people.find((x) => x.role === 'engineer');
   if (pl.recipes.includes('cup') && pl.recipes.includes('distill') && !pl.recipes.includes('bottledWater')) {
-    pl.recipes.push('bottledWater');
-    say(state, 'log.learnBottled', 'got');
+    learnRecipe(state, 'bottledWater');
   }
   if (eng?.active && pl.recipes.includes('cup') && !eng.recipes.includes('bottledWater')) eng.recipes.push('bottledWater');
 }
@@ -321,9 +320,7 @@ function rescue(state: GameState, isl: Island): void {
     if (b) isl.facility = { kind: 'produce', item: BIOME_ITEM[b] };
     for (const [k, v] of Object.entries(BALANCE.economy.rescueStartStock)) addToStock(state, isl, k as ItemId, v);
   }
-  const learn = (r: RecipeId) => {
-    if (!state.player.recipes.includes(r)) state.player.recipes.push(r);
-  };
+  const learn = (r: RecipeId) => learnRecipe(state, r);
   if (role === 'engineer') learn('distill');
   if (role === 'lumberjack') {
     learn('cup');
@@ -375,12 +372,22 @@ export function buildCost(state: GameState, what: 'lighthouse' | 'bed' | 'depot'
     const c = H.holdUpgrade.woodCosts[state.player.holdUpgrades];
     return c === undefined ? null : { wood: c };
   }
+  if (what === 'lighthouse') {
+    const costs = BALANCE.buildings.lighthouse.costs;
+    const built = state.islands.filter((i) => i.kind !== 'home' && i.buildings.lighthouse).length;
+    return costs[Math.min(built, costs.length - 1)] as Stock;
+  }
   return BALANCE.buildings[what].cost as Stock;
 }
 
 function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad' | 'holdUpgrade'): Result {
-  const isl = here(state);
-  if (!canUseStock(isl)) return fail('err.needOwnedIsland');
+  const at = here(state);
+  if (!at) return fail('err.notDocked');
+  // 灯塔可以修在任何岛上（村落、礁石也行）；其他建筑只能修在网络内的岛
+  if (what === 'lighthouse' && at.kind === 'bureau') return fail('err.cantBuildHere');
+  if (what !== 'lighthouse' && !canUseStock(at)) return fail('err.needOwnedIsland');
+  const isl = at;
+  const src = canUseStock(isl) ? isl : undefined;
   const cost = buildCost(state, what);
   if (!cost) return fail('err.maxed');
   if (what === 'holdUpgrade') {
@@ -390,8 +397,8 @@ function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad
     if (isl.buildings[what]) return fail('err.built');
     if (what === 'helipad' && !state.flags.planeRepaired) return fail('err.needPlane');
   }
-  if (!canPay(state, isl, cost)) return fail('err.missing', { list: stockP(missingCost(state, isl, cost)) });
-  pay(state, isl, cost);
+  if (!canPay(state, src, cost)) return fail('err.missing', { list: stockP(missingCost(state, src, cost)) });
+  pay(state, src, cost);
   if (what === 'holdUpgrade') {
     state.player.holdUpgrades++;
     state.player.holdCap += H.holdUpgrade.step;
@@ -400,7 +407,7 @@ function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad
     return OK;
   }
   isl.buildings[what] = true;
-  if (what === 'lighthouse') lightCircle(state, isl.x, isl.y, BALANCE.map.lighthouseRadius);
+  if (what === 'lighthouse') lightFrom(state, isl);
   say(state, 'log.built.' + what, { isl: islandM(isl.id) }, 'got');
   advance(state, BALANCE.buildings[what].minutes);
   return OK;
@@ -608,7 +615,6 @@ function endCutscene(state: GameState): Result {
     lightCircle(state, b.x, b.y, BALANCE.map.bureauLightRadius);
     lightCorridor(state, home.x, home.y, b.x, b.y, true);
     b.revealed = true;
-    b.opened = true;
     b.discovered = true;
     b.visited = true;
     b.buildings.helipad = true;
@@ -776,6 +782,9 @@ function run(state: GameState, cmd: Command): Result {
       return fly(state, cmd.to);
     case 'toggleTwoStep':
       state.player.twoStep = !state.player.twoStep;
+      return OK;
+    case 'seenRecipes':
+      state.newRecipes = [];
       return OK;
     case 'dismissTip':
       if (!state.tips.includes(cmd.id)) state.tips.push(cmd.id);

@@ -2,6 +2,7 @@ import { BALANCE } from '../config/balance';
 import { ITEMS, type ItemId } from '../config/items';
 import { RECIPES, ROLE_BIOME } from '../config/recipes';
 import { spawnNative } from './create';
+import { lightFrom } from './reveal';
 import { addToStock, stockRoom } from './inventory';
 import { say } from './log';
 import { islandM, m } from './msg';
@@ -230,6 +231,11 @@ function mealAt(state: GameState, isl: Island, scheduled: boolean): void {
       ) {
         isl.level++;
         isl.mealStreak = 0;
+        // 岛升级后，灯塔照得更远
+        if (isl.buildings.lighthouse) {
+          lightFrom(state, isl);
+          say(state, 'log.lightGrows', { isl: islandM(isl.id) }, 'hint');
+        }
         say(state, 'log.islandUp', { isl: islandM(isl.id), lv: isl.level, next: m(isl.level === 2 ? 'levelup.want2' : 'levelup.want3') }, 'got');
       }
     } else {

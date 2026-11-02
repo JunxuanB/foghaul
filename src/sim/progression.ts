@@ -1,6 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { WEAPONS } from '../config/world';
 import type { GameState, Person } from './types';
+import type { RecipeId } from '../config/recipes';
 import { say } from './log';
 import { m } from './msg';
 
@@ -90,4 +91,12 @@ export function bestWeaponKey(state: GameState): string {
 export function pilotLevel(state: GameState): number {
   const p = state.people.find((x) => x.role === 'pilot');
   return p && p.active ? personLevel(p) : 0;
+}
+
+/** 玩家学会一个配方：加进制作页，标记为“新”，写日志 */
+export function learnRecipe(state: GameState, r: RecipeId): void {
+  if (state.player.recipes.includes(r)) return;
+  state.player.recipes.push(r);
+  if (!state.newRecipes.includes(r)) state.newRecipes.push(r);
+  say(state, 'log.newRecipe', { recipe: { k: 'recipe.' + r } }, 'got');
 }

@@ -1,16 +1,15 @@
-// 剧情解锁：按 REVEALS 顺序，在条件满足时放置新岛、打开迷雾。
-import { BALANCE } from '../config/balance';
-import { ISLANDS, REVEALS, type RevealCond } from '../config/world';
+// 剧情解锁：每座岛都要先修灯塔才能探路。
+// 剧情条件满足、并且锚点岛的灯塔已经亮了，下一座岛才会在这座灯塔新照亮的海域里生成。
+import { ISLANDS, REVEALS, type RevealCond, type RevealDef } from '../config/world';
 import { giveHint } from './hints';
 import { say } from './log';
-import { findPath, lightCircle, lightCorridor } from './map';
+import { islandM } from './msg';
+import { lightCircle } from './map';
 import { roleOf } from './people';
 import { rand } from './rng';
 import type { GameState, Island } from './types';
 import { island } from './util';
-import { NATIVE_BIOMES, findSpot } from './worldgen';
-
-const M = BALANCE.map;
+import { NATIVE_BIOMES, findSpot, lightRadius } from './worldgen';
 
 function learned(state: GameState, recipe: string): boolean {
   return state.people.some((p) => p.recipes.includes(recipe as never));
@@ -35,68 +34,58 @@ export function condMet(state: GameState, c: RevealCond): boolean {
     case 'firstRoute':
       return state.transport.routes.length > 0;
   }
-  if (c.startsWith('lighthouse:')) return island(state, c.slice(11)).buildings.lighthouse;
   if (c.startsWith('learned:')) return learned(state, c.slice(8));
   if (c.startsWith('recruited:')) return island(state, c.slice(10)).owned;
   return false;
 }
 
-function resolveBiome(state: GameState, isl: Island, tplBiome: string | undefined): void {
-  if (tplBiome === 'native') isl.biome = NATIVE_BIOMES[Math.floor(rand(state) * NATIVE_BIOMES.length)];
-  else if (tplBiome === 'forestOrStone') isl.biome = rand(state) < 0.5 ? 'forest' : 'stone';
+/** 修灯塔（或岛升级时灯塔照得更远）：照亮一片圆形海域，记下事件编号 */
+export function lightFrom(state: GameState, isl: Island): void {
+  const ev = lightCircle(state, isl.x, isl.y, lightRadius(isl));
+  isl.lightEvents.push(ev);
 }
 
-/** 把岛放上地图（还在迷雾里） */
+/** 把岛放上地图 */
 export function placeIsland(state: GameState, id: string, anchorId: string): Island {
   const isl = island(state, id);
   if (isl.revealed) return isl;
-  const anchor = island(state, anchorId);
-  const spot = findSpot(state, anchor);
+  const spot = findSpot(state, island(state, anchorId));
   isl.x = spot.x;
   isl.y = spot.y;
   isl.rot = Math.floor(rand(state) * 360);
   isl.revealed = true;
+  const tpl = ISLANDS.find((t) => t.id === id)?.biome;
+  if (tpl === 'native') isl.biome = NATIVE_BIOMES[Math.floor(rand(state) * NATIVE_BIOMES.length)];
+  else if (tpl === 'forestOrStone') isl.biome = rand(state) < 0.5 ? 'forest' : 'stone';
   return isl;
 }
 
-/** 为岛打开迷雾：岛周围一小片海域，加上一条连回锚点岛的航道 */
-export function openIsland(state: GameState, id: string, anchorId: string): void {
-  const isl = island(state, id);
-  if (isl.opened) return;
-  const anchor = island(state, anchorId);
-  const ox = Math.round((rand(state) - 0.5) * 3);
-  const oy = Math.round((rand(state) - 0.5) * 3);
-  lightCircle(state, isl.x + ox, isl.y + oy, M.pocketRadius);
-  lightCircle(state, isl.x, isl.y, 1.5);
-  const xFirst = rand(state) < 0.5;
-  lightCorridor(state, anchor.x, anchor.y, isl.x, isl.y, xFirst);
-  // 航道可能被进出口局的浓雾截断：换一种折法，再不行就绕一个中间点
-  if (!findPath(state, anchor.x, anchor.y, isl.x, isl.y)) lightCorridor(state, anchor.x, anchor.y, isl.x, isl.y, !xFirst);
-  if (!findPath(state, anchor.x, anchor.y, isl.x, isl.y)) {
-    const home = island(state, 'home');
-    lightCorridor(state, home.x, home.y, isl.x, isl.y, xFirst);
-    lightCorridor(state, home.x, home.y, isl.x, isl.y, !xFirst);
-  }
-  isl.opened = true;
+/** 某座岛的解锁定义 */
+export function revealOf(id: string): RevealDef | undefined {
+  return REVEALS.find((r) => r.island === id);
+}
+
+/** 剧情已经走到了、但还缺灯塔：返回需要修灯塔的岛 id */
+export function needsLighthouse(state: GameState, id: string): string | null {
+  const r = revealOf(id);
+  if (!r || island(state, id).revealed || !condMet(state, r.when)) return null;
+  return island(state, r.anchor).buildings.lighthouse ? null : r.anchor;
 }
 
 /** 检查所有解锁条件。可以重复调用，已完成的会跳过。 */
 export function checkReveals(state: GameState): void {
   for (const r of REVEALS) {
     const isl = island(state, r.island);
-    if (!isl.revealed) {
-      if (!condMet(state, r.place)) continue;
-      placeIsland(state, r.island, r.anchor);
-      resolveBiome(state, isl, templateBiome(r.island));
-      say(state, giveHint(state, r.island, r.from, r.hint), 'hint');
+    if (isl.revealed || !condMet(state, r.when)) continue;
+    const anchor = island(state, r.anchor);
+    if (!anchor.buildings.lighthouse) {
+      if (!state.lighthouseAsked.includes(r.anchor)) {
+        state.lighthouseAsked.push(r.anchor);
+        say(state, 'log.needLighthouse', { isl: islandM(r.anchor) }, 'hint');
+      }
+      continue;
     }
-    if (!isl.opened && condMet(state, r.open ?? r.place)) {
-      openIsland(state, r.island, r.anchor);
-      if (r.open && r.open !== r.place) say(state, 'log.fogLifts', 'hint');
-    }
+    placeIsland(state, r.island, r.anchor);
+    say(state, giveHint(state, r.island, r.anchor, r.hint), 'hint');
   }
-}
-
-function templateBiome(id: string): string | undefined {
-  return ISLANDS.find((t) => t.id === id)?.biome;
 }

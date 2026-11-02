@@ -1,10 +1,10 @@
 // 地图生成：开局只确定主岛和进出口局（藏在浓雾里）的位置。
-// 其他岛在剧情解锁时才放置（见 reveal.ts），落在新打开的海域里。
+// 其他岛在剧情解锁时才放置（见 reveal.ts）：落在锚点岛灯塔新照亮、玩家还没去过的海域里。
 import { BALANCE } from '../config/balance';
 import type { Biome } from '../config/recipes';
-import { makeRng } from './rng';
-import { rand } from './rng';
-import type { GameState } from './types';
+import { lightCircle } from './map';
+import { makeRng, rand } from './rng';
+import type { GameState, Island } from './types';
 import { euclid, manhattan } from './util';
 
 const M = BALANCE.map;
@@ -31,40 +31,82 @@ export function placeHomeAndBureau(seed: number): { home: Spot; bureau: Spot } {
 
 export const NATIVE_BIOMES: Biome[] = ['field', 'forest', 'fishing', 'stone', 'herb'];
 
-/** 已放置的岛（含进出口局的保留位置） */
-function placed(state: GameState): Spot[] {
-  return state.islands.filter((i) => i.revealed || i.kind === 'bureau' || i.kind === 'home');
+/** 灯塔照亮的半径（主岛固定，其他岛按等级） */
+export function lightRadius(isl: Island): number {
+  if (isl.kind === 'home') return M.homeLightRadius;
+  return M.lighthouseRadius[Math.min(M.lighthouseRadius.length, isl.level) - 1];
+}
+
+/** 从锚点出发、在可探索海域里能走到的格子 */
+function reachableFrom(state: GameState, a: Spot): Uint8Array {
+  const W = state.width;
+  const H = state.height;
+  const seen = new Uint8Array(W * H);
+  const q = [a.y * W + a.x];
+  seen[q[0]] = 1;
+  for (let h = 0; h < q.length; h++) {
+    const c = q[h];
+    const cx = c % W;
+    const cy = (c / W) | 0;
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const n = ny * W + nx;
+      if (seen[n] || !state.lit[n]) continue;
+      seen[n] = 1;
+      q.push(n);
+    }
+  }
+  return seen;
 }
 
 /**
- * 在锚点岛附近找一个位置：优先放在还没打开的迷雾里，离锚点一段航程，和其他岛保持间距。
- * 找不到时逐步放宽条件，保证总能放下。
+ * 给下一座主线岛找位置：在锚点岛灯塔照亮的范围里，优先选这座灯塔“新照亮”、玩家没去过的格子，
+ * 和其他岛保持间距。找不到时逐步放宽；实在没有就把灯塔照得更远一圈再找。
  */
-export function findSpot(state: GameState, anchor: Spot): Spot {
+export function findSpot(state: GameState, anchor: Island): Spot {
   const W = state.width;
   const H = state.height;
-  const others = placed(state);
+  const others = state.islands.filter((i) => i.revealed || i.kind === 'bureau' || i.kind === 'home');
   const bureau = state.islands.find((i) => i.kind === 'bureau')!;
-  const tries: { min: number; max: number; spacing: number; fogOnly: boolean }[] = [
-    { min: M.neighborMin, max: M.neighborMax, spacing: M.minSpacing, fogOnly: true },
-    { min: M.neighborMin - 2, max: M.neighborMax + 4, spacing: M.minSpacing, fogOnly: true },
-    { min: M.neighborMin - 2, max: M.neighborMax + 8, spacing: M.minSpacing - 1, fogOnly: false },
-    { min: 6, max: 40, spacing: 5, fogOnly: false },
-    { min: 3, max: 99, spacing: 3, fogOnly: false },
-  ];
   const margin = 2;
-  for (const t of tries) {
+  const scan = (R: number, own: boolean, unseen: boolean, spacing: number): Spot[] => {
+    const reach = reachableFrom(state, anchor);
     const cands: Spot[] = [];
     for (let y = margin; y < H - margin; y++)
       for (let x = margin; x < W - margin; x++) {
-        const d = manhattan(x, y, anchor.x, anchor.y);
-        if (d < t.min || d > t.max) continue;
+        const i = y * W + x;
+        if (!state.lit[i] || !reach[i]) continue;
+        const d = euclid(x, y, anchor.x, anchor.y);
+        if (d < M.placeMinDistance || d > R - 1.5) continue;
+        if (own && !anchor.lightEvents.includes(state.lit[i])) continue;
+        if (unseen && state.seen[i]) continue;
         if (euclid(x, y, bureau.x, bureau.y) <= M.fogBankRadius + 3) continue;
-        if (others.some((o) => manhattan(x, y, o.x, o.y) < t.spacing)) continue;
-        if (t.fogOnly && state.lit[y * W + x]) continue;
+        if (others.some((o) => o !== anchor && manhattan(x, y, o.x, o.y) < spacing)) continue;
         cands.push({ x, y });
       }
-    if (cands.length) return cands[Math.floor(rand(state) * cands.length)];
+    return cands;
+  };
+  const pick = (c: Spot[]) => c[Math.floor(rand(state) * c.length)];
+  // 先在这座灯塔新照亮的海域里找；地方不够就让灯塔再往外照一圈
+  for (let extra = 0; extra <= 12; extra += 3) {
+    const R = lightRadius(anchor) + extra;
+    if (extra > 0) anchor.lightEvents.push(lightCircle(state, anchor.x, anchor.y, R));
+    for (const unseen of [true, false]) {
+      const c = scan(R, true, unseen, M.minSpacing);
+      if (c.length) return pick(c);
+    }
+  }
+  // 兜底：任何已照亮的地方
+  for (const spacing of [M.minSpacing, M.minSpacing - 2, 3]) {
+    const c = scan(lightRadius(anchor) + 12, false, false, spacing);
+    if (c.length) return pick(c);
   }
   throw new Error('no room for island');
 }
