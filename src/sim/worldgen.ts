@@ -1,150 +1,70 @@
+// 地图生成：开局只确定主岛和进出口局（藏在浓雾里）的位置。
+// 其他岛在剧情解锁时才放置（见 reveal.ts），落在新打开的海域里。
 import { BALANCE } from '../config/balance';
 import type { Biome } from '../config/recipes';
-import { ISLANDS, STAGE_HOST, type IslandTemplate, type Stage } from '../config/world';
 import { makeRng } from './rng';
+import { rand } from './rng';
+import type { GameState } from './types';
 import { euclid, manhattan } from './util';
 
 const M = BALANCE.map;
 
-export interface PlacedIsland {
-  id: string;
+export interface Spot {
   x: number;
   y: number;
-  rot: number;
-  biome: Biome | null;
 }
 
-export interface WorldLayout {
-  islands: PlacedIsland[];
-  attempts: number;
+/** 开局：主岛在地图中部，进出口局离主岛不远但藏在浓雾里 */
+export function placeHomeAndBureau(seed: number): { home: Spot; bureau: Spot } {
+  const r = makeRng(seed);
+  const ri = (a: number, b: number) => a + Math.floor(r() * (b - a + 1));
+  const home = { x: ri(24, 35), y: ri(13, 22) };
+  const bm = Math.ceil(M.fogBankRadius) + 2;
+  const cands: Spot[] = [];
+  for (let y = bm; y < M.height - bm; y++)
+    for (let x = bm; x < M.width - bm; x++) {
+      const d = manhattan(x, y, home.x, home.y);
+      if (d >= M.bureauMin && d <= M.bureauMax) cands.push({ x, y });
+    }
+  return { home, bureau: cands[ri(0, cands.length - 1)] };
 }
 
-const STAGE_ORDER: Stage[] = ['home', 'A', 'B', 'C', 'D'];
-const NATIVE_BIOMES: Biome[] = ['field', 'forest', 'fishing', 'stone', 'herb'];
+export const NATIVE_BIOMES: Biome[] = ['field', 'forest', 'fishing', 'stone', 'herb'];
 
-/** 某阶段已经亮起的光源（主岛 + 之前各阶段的灯塔宿主） */
-function sourcesBefore(stage: Stage, pos: Map<string, PlacedIsland>): PlacedIsland[] {
-  const out: PlacedIsland[] = [pos.get('home')!];
-  const idx = STAGE_ORDER.indexOf(stage);
-  for (const s of ['B', 'C', 'D'] as const) {
-    if (STAGE_ORDER.indexOf(s) < idx) out.push(pos.get(STAGE_HOST[s])!);
-  }
-  return out;
+/** 已放置的岛（含进出口局的保留位置） */
+function placed(state: GameState): Spot[] {
+  return state.islands.filter((i) => i.revealed || i.kind === 'bureau' || i.kind === 'home');
 }
 
-function sourcesUpTo(stage: Stage, pos: Map<string, PlacedIsland>): PlacedIsland[] {
-  const out: PlacedIsland[] = [pos.get('home')!];
-  const idx = STAGE_ORDER.indexOf(stage);
-  for (const s of ['B', 'C', 'D'] as const) {
-    if (STAGE_ORDER.indexOf(s) <= idx) out.push(pos.get(STAGE_HOST[s])!);
-  }
-  return out;
-}
-
-function tryLayout(rand: () => number): PlacedIsland[] | null {
-  const W = M.width;
-  const H = M.height;
-  const R = M.lightRadius;
+/**
+ * 在锚点岛附近找一个位置：优先放在还没打开的迷雾里，离锚点一段航程，和其他岛保持间距。
+ * 找不到时逐步放宽条件，保证总能放下。
+ */
+export function findSpot(state: GameState, anchor: Spot): Spot {
+  const W = state.width;
+  const H = state.height;
+  const others = placed(state);
+  const bureau = state.islands.find((i) => i.kind === 'bureau')!;
+  const tries: { min: number; max: number; spacing: number; fogOnly: boolean }[] = [
+    { min: M.neighborMin, max: M.neighborMax, spacing: M.minSpacing, fogOnly: true },
+    { min: M.neighborMin - 2, max: M.neighborMax + 4, spacing: M.minSpacing, fogOnly: true },
+    { min: M.neighborMin - 2, max: M.neighborMax + 8, spacing: M.minSpacing - 1, fogOnly: false },
+    { min: 6, max: 40, spacing: 5, fogOnly: false },
+    { min: 3, max: 99, spacing: 3, fogOnly: false },
+  ];
   const margin = 2;
-  const pos = new Map<string, PlacedIsland>();
-  const list: PlacedIsland[] = [];
-  const ri = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
-
-  const resolveBiome = (t: IslandTemplate): Biome | null => {
-    if (!t.biome) return null;
-    if (t.biome === 'native') return NATIVE_BIOMES[ri(0, NATIVE_BIOMES.length - 1)];
-    if (t.biome === 'forestOrStone') return rand() < 0.5 ? 'forest' : 'stone';
-    return t.biome;
-  };
-
-  for (const t of ISLANDS) {
-    let candidates: [number, number][] = [];
-    if (t.stage === 'home') {
-      candidates = [[ri(24, 35), ri(13, 22)]];
-    } else if (t.stage === 'bureau') {
-      const home = pos.get('home')!;
-      const bm = Math.ceil(M.fogBankRadius) + 1;
-      for (let y = bm; y < H - bm; y++)
-        for (let x = bm; x < W - bm; x++) {
-          const d = manhattan(x, y, home.x, home.y);
-          if (d < 15 || d > 22) continue;
-          if (list.some((p) => manhattan(x, y, p.x, p.y) < M.minSpacing + 1)) continue;
-          candidates.push([x, y]);
-        }
-    } else {
-      const parent = t.stage === 'A' ? pos.get('home')! : pos.get(STAGE_HOST[t.stage as 'B' | 'C' | 'D']);
-      if (!parent) return null;
-      const before = t.stage === 'A' ? [] : sourcesBefore(t.stage, pos);
-      for (let y = margin; y < H - margin; y++)
-        for (let x = margin; x < W - margin; x++) {
-          const d = manhattan(x, y, parent.x, parent.y);
-          if (d < M.neighborMin || d > M.neighborMax) continue;
-          if (euclid(x, y, parent.x, parent.y) > R - 0.5) continue;
-          if (before.some((s) => euclid(x, y, s.x, s.y) <= R + 0.5)) continue;
-          if (list.some((p) => manhattan(x, y, p.x, p.y) < M.minSpacing)) continue;
-          candidates.push([x, y]);
-        }
-    }
-    if (!candidates.length) return null;
-    const [x, y] = candidates[ri(0, candidates.length - 1)];
-    const p: PlacedIsland = { id: t.id, x, y, rot: ri(0, 359), biome: resolveBiome(t) };
-    pos.set(t.id, p);
-    list.push(p);
+  for (const t of tries) {
+    const cands: Spot[] = [];
+    for (let y = margin; y < H - margin; y++)
+      for (let x = margin; x < W - margin; x++) {
+        const d = manhattan(x, y, anchor.x, anchor.y);
+        if (d < t.min || d > t.max) continue;
+        if (euclid(x, y, bureau.x, bureau.y) <= M.fogBankRadius + 3) continue;
+        if (others.some((o) => manhattan(x, y, o.x, o.y) < t.spacing)) continue;
+        if (t.fogOnly && state.lit[y * W + x]) continue;
+        cands.push({ x, y });
+      }
+    if (cands.length) return cands[Math.floor(rand(state) * cands.length)];
   }
-
-  // 连通性：每个阶段的岛都能在当时已亮的区域内从主岛走到
-  const bureau = pos.get('bureau')!;
-  for (const t of ISLANDS) {
-    if (t.stage === 'home' || t.stage === 'bureau') continue;
-    const srcs = sourcesUpTo(t.stage, pos);
-    const target = pos.get(t.id)!;
-    if (!reachable(pos.get('home')!, target, srcs, bureau)) return null;
-  }
-  return list;
-}
-
-function reachable(from: PlacedIsland, to: PlacedIsland, srcs: PlacedIsland[], bureau: PlacedIsland): boolean {
-  const W = M.width;
-  const H = M.height;
-  const R = M.lightRadius;
-  const ok = (x: number, y: number) =>
-    x >= 0 &&
-    y >= 0 &&
-    x < W &&
-    y < H &&
-    euclid(x, y, bureau.x, bureau.y) > M.fogBankRadius &&
-    srcs.some((s) => euclid(x, y, s.x, s.y) <= R);
-  const seen = new Uint8Array(W * H);
-  const q: number[] = [from.y * W + from.x];
-  seen[q[0]] = 1;
-  for (let h = 0; h < q.length; h++) {
-    const c = q[h];
-    const cx = c % W;
-    const cy = (c / W) | 0;
-    if (cx === to.x && cy === to.y) return true;
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      const nx = cx + dx;
-      const ny = cy + dy;
-      if (!ok(nx, ny)) continue;
-      const n = ny * W + nx;
-      if (seen[n]) continue;
-      seen[n] = 1;
-      q.push(n);
-    }
-  }
-  return false;
-}
-
-export function generateLayout(seed: number): WorldLayout {
-  const rand = makeRng(seed);
-  for (let attempt = 1; attempt <= 2000; attempt++) {
-    const r = tryLayout(rand);
-    if (r) return { islands: r, attempts: attempt };
-  }
-  throw new Error('无法生成地图，种子 ' + seed);
+  throw new Error('no room for island');
 }

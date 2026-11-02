@@ -46,14 +46,15 @@ export function sailTo(state: GameState, id: string, opts: { safe?: boolean } = 
 
 export function homeGather(state: GameState, wood: number, fish: number) {
   const home = island(state, 'home');
+  const have = (id: 'wood' | 'fish') => (home.stock[id] ?? 0) + (state.player.pack[id] ?? 0) + (state.player.hold[id] ?? 0);
   let guard = 0;
-  while ((home.stock.wood ?? 0) < wood && guard++ < 500) {
+  while (have('wood') < wood && guard++ < 500) {
     keepAlive(state);
     const lumber = state.people.find((p) => p.role === 'lumberjack')?.active;
     must(state, { t: 'gather', what: lumber ? 'chop' : 'branch' });
   }
   guard = 0;
-  while ((home.stock.fish ?? 0) < fish && guard++ < 500) {
+  while (have('fish') < fish && guard++ < 500) {
     keepAlive(state);
     must(state, { t: 'gather', what: 'shoreFish' });
   }

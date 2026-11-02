@@ -25,15 +25,24 @@ export const BALANCE = {
   map: {
     width: 60,
     height: 36,
-    /** 主岛与灯塔的照明半径（欧氏距离） */
-    lightRadius: 13,
+    /** 开局主岛周围可探索的半径 */
+    homeLightRadius: 5,
+    /** 灯塔照亮的半径 */
+    lighthouseRadius: 7,
+    /** 剧情解锁新岛时：岛周围打开的半径，以及连回锚点岛的航道半宽 */
+    pocketRadius: 3.5,
+    corridorHalfWidth: 1,
+    /** 进出口局离主岛的距离范围，试飞后照亮的半径 */
+    bureauMin: 14,
+    bureauMax: 20,
+    bureauLightRadius: 7,
     /** 玩家视野：走过的格子周围标记为已探索 */
     seenRadius: 2,
     /** 发现岛屿的距离 */
     discoverRadius: 3,
-    /** 相邻岛的航程（曼哈顿距离） */
+    /** 新岛离锚点岛的航程（曼哈顿距离） */
     neighborMin: 10,
-    neighborMax: 16,
+    neighborMax: 15,
     /** 岛与岛之间至少相隔 */
     minSpacing: 7,
     /** 进出口局周围的浓雾半径（修好飞机前不可进入） */
@@ -91,7 +100,7 @@ export const BALANCE = {
 
   // ---------------- 背包与货舱 ----------------
   inventory: {
-    packCap: 12,
+    packCap: 16,
     holdCap: 30,
     seats: 3,
   },
@@ -202,7 +211,7 @@ export const BALANCE = {
 
   // ---------------- 存档 ----------------
   save: {
-    key: 'foghaul.save.v1',
+    key: 'foghaul.save.v2',
     autosaveSeconds: 10,
   },
 };

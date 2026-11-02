@@ -1,0 +1,25 @@
+import { useState, type ReactNode } from 'react';
+
+export interface TabDef {
+  id: string;
+  label: string;
+  node: ReactNode;
+}
+
+/** 手机布局用的简单标签页 */
+export function Tabs({ tabs, initial }: { tabs: TabDef[]; initial?: string }) {
+  const [cur, setCur] = useState(initial ?? tabs[0]?.id);
+  const sel = tabs.find((x) => x.id === cur) ?? tabs[0];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <nav role="tablist" style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)' }}>
+        {tabs.map((x) => (
+          <button key={x.id} role="tab" aria-selected={x.id === sel.id} className={'tab' + (x.id === sel.id ? ' tab-on' : '')} style={{ flex: '1 1 0', justifyContent: 'center', fontSize: 15 }} onClick={() => setCur(x.id)}>
+            {x.label}
+          </button>
+        ))}
+      </nav>
+      <div role="tabpanel">{sel.node}</div>
+    </div>
+  );
+}

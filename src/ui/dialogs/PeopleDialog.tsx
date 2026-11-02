@@ -29,7 +29,10 @@ function skillNext(skill: PlayerSkill, lv: number): string {
 export function PeopleDialog() {
   const g = useGame();
   const [picked, setPicked] = useState(0);
-  const passengers = g.people.filter((p) => p.type === 'passenger');
+  const allPassengers = g.people.filter((p) => p.type === 'passenger');
+  // 只列出已获救、或已经知道下落的同伴，其余只显示人数
+  const passengers = allPassengers.filter((p) => p.active || (p.loc.kind === 'island' && g.islands.find((i) => i.id === (p.loc as { id: string }).id)?.revealed));
+  const unknown = allPassengers.length - passengers.length;
   const natives = g.people.filter((p) => p.type === 'native' && p.active);
   const sel = passengers[picked];
   const selInfo = sel ? levelInfo(sel.xp, personTable(sel)) : null;
@@ -62,7 +65,8 @@ export function PeopleDialog() {
         </div>
       </section>
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>{t('ui.passengers', { n: passengers.filter((p) => p.active).length, total: passengers.length })}</h2>
+        <h2 style={{ margin: 0, fontSize: 18 }}>{t('ui.passengers', { n: allPassengers.filter((p) => p.active).length, total: allPassengers.length })}</h2>
+        {unknown > 0 && <p className="small" style={{ margin: 0 }}>{t('ui.unknownPassengers', { n: unknown })}</p>}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, alignItems: 'flex-start' }}>
           <div style={{ flex: '1 1 380px', minWidth: 0, fontSize: 15 }}>
             {passengers.map((p, i) => {
@@ -70,7 +74,7 @@ export function PeopleDialog() {
               return (
                 <button key={p.id} className={'pick' + (i === picked ? ' on' : '')} style={{ gridTemplateColumns: 'minmax(0,1fr) auto auto' }} onClick={() => setPicked(i)} aria-pressed={i === picked}>
                   <span>{tm(p.name)} {p.active ? `Lv.${levelInfo(p.xp, personTable(p)).level}` : ''}</span>
-                  <span style={{ color: 'var(--soft)' }}>{p.active ? where(g, p) : '???'}</span>
+                  <span style={{ color: 'var(--soft)' }}>{p.active ? where(g, p) : t('ui.whereabouts')}</span>
                   <span className={!p.active ? 'tone-ok' : hungry ? 'tone-al' : 'tone-ok'}>
                     {!p.active ? t('ui.missing') : hungry ? t('ui.starved') : p.learning ? t('ui.learningState') : t('ui.normal')}
                   </span>

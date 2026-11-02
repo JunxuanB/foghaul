@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getLang, setLang as setI18nLang, type Lang } from '../i18n';
 import { useGame, useStore } from '../store/hooks';
 import { Cutscene } from './components/Cutscene';
@@ -9,6 +9,9 @@ import { JournalDialog } from './dialogs/JournalDialog';
 import { PeopleDialog } from './dialogs/PeopleDialog';
 import { RoutesDialog } from './dialogs/RoutesDialog';
 import { SettingsDialog } from './dialogs/SettingsDialog';
+import { HelpDialog } from './dialogs/HelpDialog';
+import { Welcome } from './screens/Welcome';
+import { Intro } from './screens/Intro';
 import { IslandScene } from './scenes/IslandScene';
 import { SeaScene } from './scenes/SeaScene';
 import { UiContext, type DialogKind, type Ui } from './ui';
@@ -33,9 +36,11 @@ export function App() {
   const store = useStore();
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [dialogArg, setDialogArg] = useState<string | null>(null);
-  const [zoom, setZoomState] = useState(BALANCE.map.defaultZoom);
+  const [zoom, setZoomState] = useState(() => (window.matchMedia('(max-width: 760px)').matches ? 0 : BALANCE.map.defaultZoom));
+  const [screen, setScreen] = useState<'welcome' | 'intro' | 'game'>('welcome');
   const [theme, setThemeState] = useState(initialTheme);
   const [lang, setLangState] = useState<Lang>(getLang());
+  const startedFresh = useRef(false);
 
   const ui: Ui = useMemo(
     () => ({
@@ -58,13 +63,24 @@ export function App() {
         }
       },
       lang,
+      restart: () => {
+        store.newGame();
+        startedFresh.current = true;
+        setDialog(null);
+        setScreen('intro');
+      },
       setLang: (l) => {
         setI18nLang(l);
         setLangState(l);
       },
     }),
-    [dialog, dialogArg, zoom, theme, lang],
+    [dialog, dialogArg, zoom, theme, lang, store],
   );
+
+  // 欢迎页和剧情介绍时暂停时间
+  useEffect(() => {
+    store.setBlocked(screen !== 'game');
+  }, [screen, store]);
 
   useEffect(() => {
     setI18nLang(lang, false);
@@ -74,7 +90,7 @@ export function App() {
   // 键盘：方向键 / WASD 移动，+/- 缩放，回车靠岸/出海，空格暂停
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (dialog || store.state.cutscene) return;
+      if (dialog || store.state.cutscene || screen !== 'game') return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       const dirs: Record<string, [number, number]> = {
@@ -99,11 +115,25 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialog, zoom, store, ui]);
+  }, [dialog, zoom, store, ui, screen]);
 
   return (
     <UiContext.Provider value={ui}>
       <div className={'app t-' + theme} key={lang}>
+        {screen === 'welcome' && (
+          <Welcome
+            canContinue={store.hadSave && !startedFresh.current}
+            onContinue={() => setScreen('game')}
+            onNew={() => {
+              store.newGame();
+              startedFresh.current = true;
+              setScreen('intro');
+            }}
+          />
+        )}
+        {screen === 'intro' && <Intro onDone={() => setScreen('game')} />}
+        {screen === 'game' && (
+        <>
         <div className="wrap">
           <Header />
           {g.player.at ? <IslandScene /> : <SeaScene />}
@@ -113,8 +143,11 @@ export function App() {
         {dialog === 'routes' && <RoutesDialog />}
         {dialog === 'journal' && <JournalDialog />}
         {dialog === 'settings' && <SettingsDialog />}
+        {dialog === 'help' && <HelpDialog />}
         <Cutscene />
         {SHOW_DEV && <DevPanel />}
+        </>
+        )}
       </div>
     </UiContext.Provider>
   );

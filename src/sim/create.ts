@@ -5,26 +5,30 @@ import { look } from './map';
 import { say } from './log';
 import { m, roleM } from './msg';
 import type { GameState, Island, Person, VillageState } from './types';
-import { generateLayout } from './worldgen';
-import { giveHint } from './hints';
+import { placeHomeAndBureau } from './worldgen';
+import { checkReveals } from './reveal';
+import { updateUnlocks } from './tutorial';
+import { lightCircle } from './map';
 
 export function newSeed(): number {
   return BALANCE.map.fixedSeed ?? Math.floor(Math.random() * 2 ** 31);
 }
 
 export function createGame(seed: number = newSeed()): GameState {
-  const layout = generateLayout(seed);
-  const pos = new Map(layout.islands.map((p) => [p.id, p]));
+  const fixed = placeHomeAndBureau(seed);
   const islands: Island[] = ISLANDS.map((t) => {
-    const p = pos.get(t.id)!;
+    const p = t.kind === 'home' ? fixed.home : t.kind === 'bureau' ? fixed.bureau : { x: -1, y: -1 };
+    const biome = t.biome && t.biome !== 'native' && t.biome !== 'forestOrStone' ? t.biome : null;
     return {
       id: t.id,
       kind: t.kind,
       stage: t.stage,
       x: p.x,
       y: p.y,
-      rot: p.rot,
-      biome: p.biome,
+      rot: 0,
+      biome,
+      revealed: t.kind === 'home',
+      opened: t.kind === 'home',
       discovered: t.kind === 'home',
       visited: t.kind === 'home',
       owned: t.kind === 'home',
@@ -74,7 +78,7 @@ export function createGame(seed: number = newSeed()): GameState {
 
   const S = BALANCE.survival;
   const state: GameState = {
-    version: 1,
+    version: 2,
     seed,
     rng: seed ^ 0x5bd1e995,
     time: BALANCE.time.startMinute,
@@ -83,6 +87,9 @@ export function createGame(seed: number = newSeed()): GameState {
     islands,
     people,
     seen: new Array(BALANCE.map.width * BALANCE.map.height).fill(0),
+    lit: new Array(BALANCE.map.width * BALANCE.map.height).fill(0),
+    unlocks: [],
+    tips: [],
     player: {
       x: home.x,
       y: home.y,
@@ -132,9 +139,11 @@ export function createGame(seed: number = newSeed()): GameState {
     cutscene: null,
     nextPersonNo: no,
   };
+  lightCircle(state, home.x, home.y, BALANCE.map.homeLightRadius);
   look(state);
   for (let i = 0; i < OPENING_LINES; i++) say(state, 'opening.' + i);
-  say(state, giveHint(state, 'stoneIsle', 'home', 'hint.start'), 'hint');
+  checkReveals(state);
+  updateUnlocks(state);
   return state;
 }
 

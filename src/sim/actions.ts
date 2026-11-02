@@ -1,13 +1,12 @@
 import { BALANCE } from '../config/balance';
 import { ITEMS, PART_IDS, type ItemId } from '../config/items';
 import { BIOME_ITEM, RECIPES, ROLE_BIOME, type RecipeId } from '../config/recipes';
-import { ENDING_LINES, FLIGHT_LINES, RESCUE_HINT_TARGET } from '../config/text';
+import { ENDING_LINES, FLIGHT_LINES } from '../config/text';
 import { ISLANDS } from '../config/world';
 import { advance } from './advance';
 import { canSleepNow, untilMorning } from './clock';
 import { peopleCap, relieve } from './economy';
 import { bureauHourly, exportGoods, upgradeCost } from './endgame';
-import { giveHint } from './hints';
 import {
   addToStock,
   canPay,
@@ -22,7 +21,9 @@ import {
   stockRoom,
   whereStock,
 } from './inventory';
-import { canEnter, look } from './map';
+import { canEnter, lightCircle, lightCorridor, look } from './map';
+import { checkReveals } from './reveal';
+import { updateUnlocks } from './tutorial';
 import { fail, OK, say } from './log';
 import { islandM, itemM, m, recipeM, roleM, stockP } from './msg';
 import { headcountOf, isHungry, presentPeople, sameJob, teachableJobs } from './people';
@@ -148,22 +149,24 @@ function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'
   const isl = here(state);
   if (!isl || isl.kind !== 'home') return fail('err.homeOnly');
   const lumber = state.people.find((x) => x.role === 'lumberjack')?.active;
+  // 采集到的东西默认放进背包，满了放货舱，再满了放主岛仓库
+  const give = (item: ItemId, n: number) => n - giveToPlayer(state, item, n, 'pack');
   if (what === 'branch' || what === 'chop') {
     const chop = what === 'chop';
     if (chop && !lumber) return fail('err.needLumberjack');
     const g = chop ? H.chop : H.branch;
-    const k = addToStock(state, isl, 'wood', g.wood);
+    const k = give('wood', g.wood);
     say(state, k ? (chop ? 'log.chop' : 'log.branch') : 'log.stockFull', { n: k, item: itemM('wood') });
     advance(state, g.minutes);
   } else if (what === 'shoreFish') {
     if (chance(state, H.shoreFish.chance)) {
-      const k = addToStock(state, isl, 'fish', 1);
+      const k = give('fish', 1);
       say(state, k ? 'log.shoreFish' : 'log.stockFull', { item: itemM('fish') });
     } else say(state, 'log.shoreFishMiss');
     advance(state, H.shoreFish.minutes);
   } else {
     if (state.flags.herbsLeft <= 0) return fail('err.noHerbs');
-    const k = addToStock(state, isl, 'herb', 1);
+    const k = give('herb', 1);
     if (k) state.flags.herbsLeft--;
     say(state, 'log.herb', { left: state.flags.herbsLeft });
     advance(state, H.herb.minutes);
@@ -204,7 +207,7 @@ function harvest(state: GameState, plot: number): Result {
   const isl = here(state);
   if (!isl || isl.kind !== 'home') return fail('err.homeOnly');
   if (!plotReady(state, plot)) return fail('err.notRipe');
-  const k = addToStock(state, isl, 'wheat', H.farm.yield);
+  const k = H.farm.yield - giveToPlayer(state, 'wheat', H.farm.yield, 'pack');
   state.flags.farm[plot] = null;
   say(state, 'log.harvest', { n: k });
   advance(state, H.farm.plantMinutes);
@@ -239,9 +242,9 @@ function craft(state: GameState, recipe: RecipeId, times = 1): Result {
       if (done === 0) return fail('err.missing', { list: stockP(missingCost(state, src, r.inputs as Stock)) });
       break;
     }
-    // 产物放到岛上库存（可用时），否则给玩家
+    // 能带走的产物放进背包（满了放货舱、再放岛上仓库），散装的水留在岛上仓库
     const room = Object.entries(r.outputs).every(([k, v]) =>
-      src ? stockRoom(state, src, k as ItemId) >= (v ?? 0) : true,
+      src && !ITEMS[k as ItemId].portable ? stockRoom(state, src, k as ItemId) >= (v ?? 0) : true,
     );
     if (!room) {
       if (done === 0) return fail('err.stockFull');
@@ -250,13 +253,14 @@ function craft(state: GameState, recipe: RecipeId, times = 1): Result {
     pay(state, src, r.inputs as Stock);
     for (const [k, v] of Object.entries(r.outputs)) {
       const id = k as ItemId;
-      if (src) addToStock(state, src, id, v ?? 0);
-      else giveToPlayer(state, id, v ?? 0);
+      if (!ITEMS[id].portable && src) addToStock(state, src, id, v ?? 0);
+      else giveToPlayer(state, id, v ?? 0, 'pack');
       stockAdd(made, id, v ?? 0);
     }
     done++;
   }
-  say(state, 'log.crafted', { made: stockP(made), where: src ? m('where.stock') : m('where.carried') });
+  const bulk = Object.keys(made).some((k) => !ITEMS[k as ItemId].portable);
+  say(state, 'log.crafted', { made: stockP(made), where: bulk ? m('where.stock') : m('where.carried') });
   advance(state, r.manualMinutes * done);
   return OK;
 }
@@ -337,8 +341,6 @@ function rescue(state: GameState, isl: Island): void {
   }
   syncBasicRecipes(state);
   say(state, `rescue.${role}.teach`, 'got');
-  const next = RESCUE_HINT_TARGET[role];
-  if (next) say(state, giveHint(state, next, isl.id, `rescue.${role}.hint`), 'hint');
 }
 
 function recruit(state: GameState, isl: Island): void {
@@ -404,6 +406,7 @@ function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad
     return OK;
   }
   isl.buildings[what] = true;
+  if (what === 'lighthouse') lightCircle(state, isl.x, isl.y, BALANCE.map.lighthouseRadius);
   say(state, 'log.built.' + what, { isl: islandM(isl.id) }, 'got');
   advance(state, BALANCE.buildings[what].minutes);
   return OK;
@@ -607,6 +610,11 @@ function endCutscene(state: GameState): Result {
   if (c.kind === 'flight') {
     state.flags.flightDone = true;
     const b = island(state, 'bureau');
+    const home = island(state, 'home');
+    lightCircle(state, b.x, b.y, BALANCE.map.bureauLightRadius);
+    lightCorridor(state, home.x, home.y, b.x, b.y, true);
+    b.revealed = true;
+    b.opened = true;
     b.discovered = true;
     b.visited = true;
     b.buildings.helipad = true;
@@ -679,6 +687,8 @@ export function dispatch(state: GameState, cmd: Command): Result {
   if (state.cutscene && cmd.t !== 'endCutscene') return fail('err.cutscene');
   const r = run(state, cmd);
   if (!r.ok && r.msg) say(state, r.msg, 'warn');
+  checkReveals(state);
+  updateUnlocks(state);
   return r;
 }
 
@@ -774,6 +784,9 @@ function run(state: GameState, cmd: Command): Result {
       return fly(state, cmd.to);
     case 'toggleTwoStep':
       state.player.twoStep = !state.player.twoStep;
+      return OK;
+    case 'dismissTip':
+      if (!state.tips.includes(cmd.id)) state.tips.push(cmd.id);
       return OK;
   }
 }

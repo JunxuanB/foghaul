@@ -4,7 +4,7 @@ import { RECIPES } from '../../config/recipes';
 import { ISLANDS } from '../../config/world';
 import { t, tm } from '../../i18n';
 import { buildCost, canUseStock, here, trainCost } from '../../sim/actions';
-import { canSleepNow } from '../../sim/clock';
+import { canSleepNow, isNight } from '../../sim/clock';
 import { islandRate, peopleCap } from '../../sim/economy';
 import { canPay, stockCap } from '../../sim/inventory';
 import { stockP } from '../../sim/msg';
@@ -18,6 +18,10 @@ import { LogView } from '../components/LogView';
 import { ObjectiveCard } from '../components/Objective';
 import { M, T } from '../components/Text';
 import { useUi } from '../ui';
+import { useNarrow } from '../hooks';
+import { Tabs } from '../components/Tabs';
+import { TipBox } from '../components/Tip';
+import { has } from '../../sim/tutorial';
 import { BureauPanel } from './BureauPanel';
 import { CraftPanel } from './CraftPanel';
 import { HomePanel } from './HomePanel';
@@ -27,6 +31,7 @@ import { VillagePanel } from './VillagePanel';
 export function IslandScene() {
   const g = useGame();
   const store = useStore();
+  const narrow = useNarrow();
   const isl = here(g)!;
   const owned = canUseStock(isl);
   const vid = villageOf(isl);
@@ -36,53 +41,92 @@ export function IslandScene() {
     need &&
     !isl.owned &&
     (isl.kind !== 'islet' || g.people.some((p) => p.loc.kind === 'island' && p.loc.id === isl.id && !p.active));
+  const home = isl.kind === 'home';
   const sub: string[] = [];
   if (isl.biome) sub.push(t('biome.' + isl.biome));
-  if (owned && isl.kind !== 'home') sub.push(t('ui.level', { n: isl.level }));
-  if (owned || vid) sub.push(t('ui.pop', { n: headcountOf(g, isl), cap: peopleCap(isl) >= 99 ? '∞' : peopleCap(isl) }));
+  if (owned && !home) sub.push(t('ui.level', { n: isl.level }));
+  if ((owned && (!home || has(g, 'people'))) || vid) sub.push(t('ui.pop', { n: headcountOf(g, isl), cap: peopleCap(isl) >= 99 ? '∞' : peopleCap(isl) }));
+  const showStock = owned && (!home || has(g, 'build') || Object.keys(isl.stock).length > 0);
+  const showBuild = owned && (!home || has(g, 'build'));
+
+  const main = (
+    <>
+      <Alerts isl={isl} />
+      {home && <HomePanel />}
+      {waiting && need && (
+        <NeedList
+          need={need}
+          progress={isl.needProgress}
+          title={isl.kind === 'native' ? t('ui.recruitTitle') : t('ui.rescueTitle', { who: t('role.' + tpl.passenger) })}
+        />
+      )}
+      {vid && <VillagePanel vid={vid} />}
+      {isl.kind === 'bureau' && <BureauPanel />}
+      <div className="grid2" style={{ fontSize: 15 }}>
+        {owned && !home && <FacilitySection isl={isl} />}
+        <PeopleSection isl={isl} />
+        {showStock && <StockSection isl={isl} />}
+        {showBuild && <BuildSection isl={isl} />}
+        {has(g, 'craft') && <CraftPanel />}
+        <DockSection isl={isl} />
+      </div>
+    </>
+  );
+
+  const head = (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+      <div>
+        <h2 id="isle-name" style={{ margin: 0, fontSize: narrow ? 28 : 36, fontWeight: 700, lineHeight: 1.2 }}>{t('island.' + isl.id)}</h2>
+        {sub.length > 0 && <p style={{ margin: '6px 0 0', fontSize: 15, color: 'var(--soft)' }}>{sub.join(' / ')}</p>}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {isl.buildings.bed && has(g, 'sleep') && (
+          <button className={'cmd' + (canSleepNow(g.time) && isNight(g.time) ? ' lead' : '')} disabled={!canSleepNow(g.time)} onClick={() => store.dispatch({ t: 'sleep' })} title={t('ui.sleepHint')}>
+            {t('ui.sleep')}
+          </button>
+        )}
+        {has(g, 'sea') && <button className="cmd" onClick={() => store.dispatch({ t: 'wait', minutes: 60 })}>{t('ui.wait1h')}</button>}
+        <FlyButton isl={isl} />
+        {g.player.hasRaft && (
+          <button className="cmd lead" onClick={() => store.dispatch({ t: 'leave' })}>{t('ui.setSail')}</button>
+        )}
+      </div>
+    </div>
+  );
+
+  const seaside = (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 15 }}>
+      <span className="small">{t('ui.seaside')}</span>
+      <button className="cmd mini" onClick={() => store.dispatch({ t: 'drinkSea' })}>{t('ui.drinkSea')}</button>
+      <button className="cmd mini" onClick={() => store.dispatch({ t: 'fishSea' })}>{t('ui.fishSea')}</button>
+    </div>
+  );
+
+  if (narrow) {
+    return (
+      <main style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {head}
+        <TipBox />
+        <LogView count={2} big={false} />
+        <ObjectiveCard />
+        <Tabs
+          tabs={[
+            { id: 'isle', label: t('ui.tab.island'), node: <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>{main}{seaside}</div> },
+            { id: 'items', label: t('ui.tab.items'), node: <Inventory /> },
+            { id: 'log', label: t('ui.tab.log'), node: <LogView count={8} big={false} /> },
+          ]}
+        />
+      </main>
+    );
+  }
+
   return (
     <main style={{ display: 'flex', flexWrap: 'wrap', gap: 36, alignItems: 'flex-start' }}>
       <section aria-labelledby="isle-name" style={{ flex: '999 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 22 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <h2 id="isle-name" style={{ margin: 0, fontSize: 36, fontWeight: 700, lineHeight: 1.2 }}>{t('island.' + isl.id)}</h2>
-            <p style={{ margin: '6px 0 0', fontSize: 15, color: 'var(--soft)' }}>{sub.join(' / ')}</p>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {isl.buildings.bed && (
-              <button className="cmd" disabled={!canSleepNow(g.time)} onClick={() => store.dispatch({ t: 'sleep' })} title={t('ui.sleepHint')}>
-                {t('ui.sleep')}
-              </button>
-            )}
-            <button className="cmd" onClick={() => store.dispatch({ t: 'wait', minutes: 60 })}>{t('ui.wait1h')}</button>
-            <FlyButton isl={isl} />
-            {g.player.hasRaft && (
-              <button className="cmd lead" onClick={() => store.dispatch({ t: 'leave' })}>{t('ui.setSail')}</button>
-            )}
-          </div>
-        </div>
-
-        <Alerts isl={isl} />
-
-        {isl.kind === 'home' && <HomePanel />}
-        {waiting && need && (
-          <NeedList
-            need={need}
-            progress={isl.needProgress}
-            title={isl.kind === 'native' ? t('ui.recruitTitle') : t('ui.rescueTitle', { who: t('role.' + tpl.passenger) })}
-          />
-        )}
-        {vid && <VillagePanel vid={vid} />}
-        {isl.kind === 'bureau' && <BureauPanel />}
-
-        <div className="grid2" style={{ fontSize: 15 }}>
-          {owned && isl.kind !== 'home' && <FacilitySection isl={isl} />}
-          <PeopleSection isl={isl} />
-          {owned && <StockSection isl={isl} />}
-          {owned && <BuildSection isl={isl} />}
-          <CraftPanel />
-          <DockSection isl={isl} />
-        </div>
+        {head}
+        <TipBox />
+        {main}
+        {seaside}
         <div style={{ borderTop: '1px dashed var(--line)', paddingTop: 14 }}>
           <LogView count={4} big={false} />
         </div>
@@ -211,7 +255,7 @@ function PeopleSection({ isl }: { isl: Island }) {
   const people = everyoneOn(g, isl);
   const owned = canUseStock(isl);
   const trainers = presentPeople(g).filter((p) => p.type === 'passenger' && !p.learning);
-  if (!people.length && !owned) return null;
+  if (!people.length && (!owned || (isl.kind === 'home' && !has(g, 'people')))) return null;
   return (
     <section>
       <h3 className="h3">{t('ui.peopleHere')}</h3>
@@ -277,6 +321,7 @@ function StockSection({ isl }: { isl: Island }) {
   return (
     <section>
       <h3 className="h3">{t('ui.stock')}</h3>
+      <p className="note">{t('ui.stockNote')}</p>
       <ItemRows stock={isl.stock} acts={acts('stock')} cap={(id) => stockCap(g, isl, id)} empty={t('ui.stockEmpty')} />
     </section>
   );

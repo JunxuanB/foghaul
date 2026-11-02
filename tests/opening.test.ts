@@ -15,7 +15,8 @@ describe('opening', () => {
     homeGather(s, 8, 8);
     must(s, { t: 'buildRaft' });
     expect(s.player.hasRaft).toBe(true);
-    must(s, { t: 'transfer', item: 'fish', from: 'stock', to: 'hold', n: 8 });
+    // 采集到的东西进背包
+    expect((s.player.pack.fish ?? 0) + (s.player.pack.wood ?? 0)).toBeGreaterThan(0);
     sailTo(s, 'stoneIsle');
     must(s, { t: 'deliver' });
     const eng = s.people.find((p) => p.role === 'engineer')!;
@@ -23,11 +24,39 @@ describe('opening', () => {
     expect(s.player.recipes).toContain('distill');
     expect(island(s, 'stoneIsle').owned).toBe(true);
     expect(s.hints.forestIsle).toBeTruthy();
+    // 一次只开放一座新岛
+    expect(island(s, 'forestIsle').revealed).toBe(true);
+    expect(island(s, 'nativeA').revealed).toBe(false);
+    expect(island(s, 'fisherIsle').revealed).toBe(false);
     // 伐木工要 4 份食物
     sailTo(s, 'forestIsle');
     must(s, { t: 'deliver' });
     expect(s.people.find((p) => p.role === 'lumberjack')!.active).toBe(true);
     expect(s.player.recipes).toContain('bottledWater');
+    expect(island(s, 'nativeA').revealed).toBe(true);
+    expect(island(s, 'fisherIsle').revealed).toBe(false);
+  });
+
+  it('reveals interface features gradually', () => {
+    const s = createGame(77);
+    expect(s.unlocks).not.toContain('shoreFish');
+    must(s, { t: 'gather', what: 'branch' });
+    must(s, { t: 'gather', what: 'branch' });
+    expect(s.unlocks).toContain('shoreFish');
+    expect(s.unlocks).not.toContain('sea');
+    expect(s.player.pack.wood).toBe(2);
+  });
+
+  it('lighthouse-gated islands are placed with a hint but stay in fog until the lighthouse', async () => {
+    const { runUntil } = await import('../src/sim/bot');
+    const s = runUntil(31, 'fisher');
+    const v = island(s, 'village1');
+    expect(v.revealed).toBe(true);
+    expect(v.opened).toBe(false);
+    expect(s.hints.village1).toBeTruthy();
+    const { STEPS } = await import('../src/sim/bot');
+    STEPS.find((x) => x.id === 'lighthouse1')!.run(s);
+    expect(island(s, 'village1').opened).toBe(true);
   });
 
   it('time advances survival and night damage at sea', () => {

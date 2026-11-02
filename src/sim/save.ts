@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import type { GameState } from './types';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);

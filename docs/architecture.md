@@ -44,9 +44,12 @@ useGame()（useSyncExternalStore）→ 整棵 React 树重渲染，读 store.sta
 | --- | --- |
 | `seed` / `rng` | 地图种子；`rng` 是随机数生成器的当前状态，随存档保存，保证可复现 |
 | `time` | 从第 1 天 00:00 起的游戏分钟（浮点） |
-| `islands[]` | 按 `config/world.ts` 的 `ISLANDS` 顺序排列；`id` 稳定，`islands[0]` 是主岛 |
+| `islands[]` | 按 `config/world.ts` 的 `ISLANDS` 顺序排列；`id` 稳定，`islands[0]` 是主岛。`revealed`（已放上地图，之前坐标为 -1）、`opened`（迷雾已为它打开）、`discovered`（玩家看到过） |
 | `people[]` | 乘客（`p_<role>`）和原住民（`n<序号>`）；`loc` 表示在岛上、在玩家木筏上或在运输线上 |
 | `seen[]` | 60×36 的 0/1 数组，已探索的海面 |
+| `lit[]` | 60×36 的 0/1 数组，可探索海域（迷雾以外）。由剧情解锁、灯塔、试飞逐步打开，见 `sim/reveal.ts` |
+| `unlocks[]` | 已经出现的界面功能（新手引导逐步展示），见 `sim/tutorial.ts` |
+| `tips[]` | 玩家已关闭的情境提示 |
 | `player` | 位置、`at`（靠岸的岛 id，null 表示在海上）、生命/水/食物、背包、货舱、随船人员、经验、武器、已会的配方、航行目标 |
 | `villages` | 每个村落的好感、当前请求进度、待学配方 |
 | `flags` | 主线进度标记：主岛草药余量、农田、第一次培训、争水源事件、已装零件、飞机修好、试飞完成、已汇报 |
@@ -56,7 +59,7 @@ useGame()（useSyncExternalStore）→ 整棵 React 树重渲染，读 store.sta
 | `log[]` | 最近 300 条日志（`LogLine`：时间、`Msg`、整行语气） |
 | `cutscene` | 正在播放的过场（试飞 / 结局），播放期间时间停止、命令被拒 |
 
-注意：**派生数据不入状态**。光照范围、岛屿状态、产能、目标进度都由函数现算（`map.lightSources`、`ui/selectors.islandStatus`、`economy.islandRate`、`objectives.objectives`）。
+注意：**派生数据不入状态**。岛屿状态、产能、目标进度都由函数现算（`map.lightSources`、`ui/selectors.islandStatus`、`economy.islandRate`、`objectives.objectives`）。
 
 ## 命令（Command）
 
@@ -66,6 +69,7 @@ useGame()（useSyncExternalStore）→ 整棵 React 树重渲染，读 store.sta
 - 过场期间除 `endCutscene` 外一律拒绝。
 - 需要耗时的命令在内部调用 `advance()`，所以“做一件事”会让全网（生产、运输、玩家消耗）一起前进。
 - 处理函数用 `fail('err.xxx', params)` 返回错误，用 `OK` 返回成功。
+- 每条命令处理完后，`dispatch` 统一调用 `checkReveals`（剧情解锁新岛）和 `updateUnlocks`（新手引导展示新功能）。所以新增的解锁条件只要写进配置，不需要在各个命令里手动触发。
 
 UI 用来判断按钮是否可点的辅助函数也从 `actions.ts` 导出：`here`、`canUseStock`、`craftable`、`plotReady`、`buildCost`、`trainCost`。按钮被禁用只是体验优化，真正的校验永远在 `dispatch` 里。
 
@@ -76,7 +80,7 @@ UI 用来判断按钮是否可点的辅助函数也从 `actions.ts` 导出：`he
 1. 每片 = min(剩余, 到下一个整点)。
 2. 每片依次执行：`survive`（玩家水/食物消耗、缺水缺食和夜间掉血）→ `produce`（各岛产出/加工）→ `tickTransport`（运输木筏移动、装卸）。
 3. 跨过整点时执行 `hourly`：到饭点（06/14/22）调用 `meal`；06:00 调用 `births`；然后 `sleepyCheck`、`bureauHourly`。
-4. 每片都检查学习是否完成（`finishLearning`）。
+4. 每片都检查学习是否完成（`finishLearning`），有人学完就调用 `checkReveals`；每过一个整点调用 `updateUnlocks`。
 5. 生命归零时调用 `die()`，并把死亡耗时（4 小时）追加到剩余时间里继续推进。
 6. 有过场时立即停止推进。
 
@@ -106,8 +110,8 @@ type Param = string | number | Msg | { stock: Stock } | { list: Msg[] };
 
 ## 存档（sim/save.ts）
 
-- 键：`foghaul.save.v1`（`BALANCE.save.key`），值是整个 `GameState` 的 JSON。
-- `SAVE_VERSION = 1`。读档时 `migrate()` 只接受同版本，否则返回 null（视为新游戏）。**修改 `GameState` 结构时要提升版本号并在 `migrate` 里写迁移**，否则玩家的旧存档会被丢弃。
+- 键：`foghaul.save.v2`（`BALANCE.save.key`），值是整个 `GameState` 的 JSON。
+- `SAVE_VERSION = 2`（v2 改为逐步生成地图，与 v1 不兼容，v1 存档会被忽略）。读档时 `migrate()` 只接受同版本，否则返回 null（视为新游戏）。**修改 `GameState` 结构时要提升版本号并在 `migrate` 里写迁移**，否则玩家的旧存档会被丢弃。
 - GameStore 每 10 秒自动存档，页面隐藏和关闭时也存。设置弹窗提供导出 / 导入 JSON 和新游戏。
 
 语言（`foghaul.lang`）和主题（`foghaul.theme`）各自单独存在 localStorage 里，不属于存档。
@@ -116,14 +120,17 @@ type Param = string | number | Msg | { stock: Stock } | { list: Msg[] };
 
 - 每 200ms 一次 `tick`。现实时间差最多按 1 秒计（`maxRealStepMs`），切回页面不会一下跳过很多时间。
 - 换算：`游戏分钟 = 现实秒 / 37.5 × 60 × speed`。`speed` 是调试倍率。
-- `running = !paused && !document.hidden && !cutscene`。不在运行时 tick 直接返回，因此“离线不推进”是天然成立的。
+- `running = !paused && !blocked && !document.hidden && !cutscene`。`blocked` 在欢迎页和开场剧情期间为 true。`hadSave` 记录启动时是否有存档，决定欢迎页是否显示“继续”。不在运行时 tick 直接返回，因此“离线不推进”是天然成立的。
 - `replace(state)` 用于导入存档和调试预设，`newGame(seed?)` 清档重开。
 
 ## UI 结构
 
 ```
-App（UiContext：当前弹窗、地图缩放、主题、语言；键盘快捷键）
-├─ Header（时钟、昼夜条、入夜倒计时、面板按钮、暂停、生命/水/食物）
+App（UiContext：当前弹窗、地图缩放、主题、语言、restart；键盘快捷键；screen 状态）
+├─ screens/Welcome（选语言、继续 / 新的旅程）
+├─ screens/Intro（新游戏的背景故事 + 怎么玩）
+└─ 游戏界面（screen === 'game'）
+├─ Header（窄屏时收进“菜单”）（时钟、昼夜条、入夜倒计时、面板按钮、暂停、生命/水/食物）
 ├─ SeaScene（player.at 为 null）
 │   ├─ LogView + 情境操作（捞起来、靠岸）+ 喝海水/跳海捕鱼 + ObjectiveCard
 │   ├─ MapPanel → MapView（网格、岛屿标记、航线、船、玩家、目标虚线、边缘提示、选目标）
@@ -133,11 +140,15 @@ App（UiContext：当前弹窗、地图缩放、主题、语言；键盘快捷�
 │   ├─ 按岛类型：HomePanel / NeedList（救援、招募）/ VillagePanel / BureauPanel
 │   ├─ 设施、人员（培训/转岗/接走）、库存、建设、制作（CraftPanel）、码头
 │   └─ ObjectiveCard + Inventory
-├─ 弹窗（原生 <dialog>）：People / Islands / Routes / Journal / Settings
+├─ TipBox（情境提示，场景顶部）
+├─ 弹窗（原生 <dialog>）：People / Islands / Routes / Journal / Help / Settings
 ├─ Cutscene（试飞、结局）
 └─ DevPanel（仅开发模式或 ?debug）
 ```
 
+- 窄屏（≤760px，`ui/hooks.ts` 的 `useNarrow`）时，场景改为单列 + 标签页（`components/Tabs.tsx`），弹窗全屏。
+- 物品名统一用 `components/Tip.tsx` 的 `<ItemName id>` 渲染，自带说明气泡。
+- 功能是否显示看 `has(state, 'xxx')`（`sim/tutorial.ts`），不要在组件里另写一套“该不该显示”的条件。
 - `ui/selectors.ts`：`islandStatus()` 把岛屿归为 运转中 / 需要处理 / 停工 / 其他，地图和总览共用；`bar()` 画字符进度条。
 - 样式：`ui/styles/global.css` 放视觉 token（`.t-dark`、`.t-light` 两套 CSS 变量，取自美术 Demo）和通用组件类（`.cmd`、`.lead`、`.mini`、`.row`、`.pick`、`.tab`、`.box`、`.tone-*`）。地图用 CSS Module（`MapView.module.css`）。
 - 注意 `.isle/.warn/.stop/.neutral/.fog/.open/.seen` 是**纯色块背景**（地图格子和图例用），不要拿来做其他组件的修饰类；提示框用 `.box-alert`、`.box-stop`。

@@ -3,11 +3,14 @@ import { t } from '../../i18n';
 import { dirOf, island, manhattan } from '../../sim/util';
 import { useGame, useStore } from '../../store/hooks';
 import { MapView } from './MapView';
+import { useNarrow } from '../hooks';
 
 export function MapPanel() {
   const g = useGame();
   const store = useStore();
   const [picking, setPicking] = useState(false);
+  const narrow = useNarrow();
+  const k = narrow ? 56 : 48;
   const p = g.player;
   const tgt = p.target ? island(g, p.target) : null;
   let guide = t('ui.noTarget');
@@ -47,7 +50,7 @@ export function MapPanel() {
       </div>
       {atSea && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(2, 48px)', gap: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(3, ${k}px)`, gridTemplateRows: `repeat(2, ${k}px)`, gap: 4 }}>
             <span />
             <button className="cmd" style={{ padding: 0 }} onClick={() => go(0, -1)} aria-label={t('ui.moveUp')}>{t('ui.up')}</button>
             <span />
@@ -55,7 +58,7 @@ export function MapPanel() {
             <button className="cmd" style={{ padding: 0 }} onClick={() => go(0, 1)} aria-label={t('ui.moveDown')}>{t('ui.down')}</button>
             <button className="cmd" style={{ padding: 0 }} onClick={() => go(1, 0)} aria-label={t('ui.moveRight')}>{t('ui.right')}</button>
           </div>
-          <p className="small" style={{ margin: 0, maxWidth: 260 }}>{t('ui.keysHint')}</p>
+          {!narrow && <p className="small" style={{ margin: 0, maxWidth: 260 }}>{t('ui.keysHint')}</p>}
         </div>
       )}
     </section>

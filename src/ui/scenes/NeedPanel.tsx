@@ -2,6 +2,7 @@ import type { Need } from '../../config/world';
 import { t, tm } from '../../i18n';
 import { carriedForNeed, needMsg } from '../../sim/inventory';
 import { useGame, useStore } from '../../store/hooks';
+import { ItemName } from '../components/Tip';
 
 /** 需求清单 + 交付按钮（救援、招募、村落请求共用） */
 export function NeedList({ need, progress, title, reward, blocked }: { need: Need[]; progress: number[]; title: string; reward?: string; blocked?: string }) {
@@ -18,7 +19,7 @@ export function NeedList({ need, progress, title, reward, blocked }: { need: Nee
           const done = have >= n.n;
           return (
             <li key={i} className="row" style={{ minHeight: 40 }}>
-              <span className="nm">{tm(needMsg(n))}</span>
+              <span className="nm">{n.kind === 'item' ? <ItemName id={n.item} /> : n.kind === 'drink' ? <ItemName id="bottledWater" /> : tm(needMsg(n))}</span>
               <span className={done ? 'meta' : 'meta tone-al'}>
                 {have}/{n.n}
               </span>

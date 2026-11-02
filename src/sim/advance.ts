@@ -6,6 +6,8 @@ import { bureauHourly } from './endgame';
 import { say } from './log';
 import { islandM, m, recipeM, stockP } from './msg';
 import { tickTransport } from './transport';
+import { checkReveals } from './reveal';
+import { updateUnlocks } from './tutorial';
 import type { GameState } from './types';
 import { findIsland, island, manhattan, stockAdd } from './util';
 
@@ -46,7 +48,8 @@ function hourly(state: GameState): void {
   bureauHourly(state);
 }
 
-function finishLearning(state: GameState): void {
+function finishLearning(state: GameState): boolean {
+  let any = false;
   for (const p of state.people) {
     if (!p.learning || state.time < p.learning.until) continue;
     const { recipe, village } = p.learning;
@@ -56,7 +59,9 @@ function finishLearning(state: GameState): void {
     const v = state.villages[village];
     v.pendingRecipes = v.pendingRecipes.filter((r) => r !== recipe);
     say(state, 'log.learned', { who: p.name, recipe: recipeM(recipe), village: m('village.' + village) }, 'got');
+    any = true;
   }
+  return any;
 }
 
 /** 推进全网时间。时钟、玩家消耗、生产、需求、运输一起前进。 */
@@ -76,8 +81,9 @@ export function advance(state: GameState, minutes: number, opts: AdvanceOpts = {
     if (state.time >= nextHour - 1e-9) {
       state.time = nextHour;
       hourly(state);
+      updateUnlocks(state);
     }
-    finishLearning(state);
+    if (finishLearning(state)) checkReveals(state);
     if (state.player.hp <= 0) {
       die(state);
       remaining += S.death.minutes;

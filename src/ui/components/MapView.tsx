@@ -1,5 +1,5 @@
 import { t } from '../../i18n';
-import { inBounds, isLit, isSeen, lightSources } from '../../sim/map';
+import { isLit, isSeen } from '../../sim/map';
 import { boatPos } from '../../sim/transport';
 import { dirOf, island, manhattan } from '../../sim/util';
 import { useGame, useStore } from '../../store/hooks';
@@ -18,11 +18,10 @@ export function MapView({ picking, setPicking }: { picking: boolean; setPicking:
   const [cols, rows] = ZOOMS[ui.zoom];
   const cx = Math.max(0, Math.min(g.width - cols, p.x - Math.floor(cols / 2)));
   const cy = Math.max(0, Math.min(g.height - rows, p.y - Math.floor(rows / 2)));
-  const sources = lightSources(g);
   const cells: string[] = [];
   for (let y = cy; y < cy + rows; y++)
     for (let x = cx; x < cx + cols; x++) {
-      if (!inBounds(g, x, y) || !isLit(g, x, y, sources)) cells.push('fog');
+      if (!isLit(g, x, y)) cells.push('fog');
       else cells.push(isSeen(g, x, y) ? 'seen' : 'open');
     }
   const px = (x: number) => ((x - cx + 0.5) / cols) * 100;

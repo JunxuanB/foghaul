@@ -4,19 +4,7 @@ import { euclid } from './util';
 
 const M = BALANCE.map;
 
-export interface LightSource {
-  x: number;
-  y: number;
-  r: number;
-}
-
-export function lightSources(state: GameState): LightSource[] {
-  const out: LightSource[] = [];
-  for (const i of state.islands) {
-    if (i.kind === 'home' || i.buildings.lighthouse) out.push({ x: i.x, y: i.y, r: M.lightRadius });
-  }
-  return out;
-}
+// 可探索区域是一张显式的 0/1 位图（state.lit），由剧情解锁、灯塔和试飞逐步打开。
 
 export function inBounds(state: GameState, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < state.width && y < state.height;
@@ -26,7 +14,7 @@ export function bureauIsland(state: GameState): Island | undefined {
   return state.islands.find((i) => i.kind === 'bureau');
 }
 
-/** 进出口局周围的浓雾（修好飞机前一直存在） */
+/** 进出口局周围的浓雾（修好飞机前一直存在，任何东西都照不亮它） */
 export function inFogBank(state: GameState, x: number, y: number): boolean {
   if (state.flags.flightDone) return false;
   const b = bureauIsland(state);
@@ -34,22 +22,52 @@ export function inFogBank(state: GameState, x: number, y: number): boolean {
   return euclid(x, y, b.x, b.y) <= M.fogBankRadius;
 }
 
-export function isLitBy(sources: LightSource[], x: number, y: number): boolean {
-  for (const s of sources) if (euclid(x, y, s.x, s.y) <= s.r) return true;
-  return false;
+export function isLit(state: GameState, x: number, y: number): boolean {
+  return inBounds(state, x, y) && state.lit[y * state.width + x] === 1;
 }
 
-export function isLit(state: GameState, x: number, y: number, sources = lightSources(state)): boolean {
-  if (inFogBank(state, x, y)) return false;
-  if (state.flags.flightDone) {
-    const b = bureauIsland(state);
-    if (b && euclid(x, y, b.x, b.y) <= M.lightRadius) return true;
+export function canEnter(state: GameState, x: number, y: number): boolean {
+  return isLit(state, x, y);
+}
+
+function light(state: GameState, x: number, y: number): void {
+  if (!inBounds(state, x, y) || inFogBank(state, x, y)) return;
+  state.lit[y * state.width + x] = 1;
+}
+
+/** 打开一片圆形海域 */
+export function lightCircle(state: GameState, cx: number, cy: number, r: number): void {
+  const R = Math.ceil(r);
+  for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) if (euclid(x, y, cx, cy) <= r) light(state, x, y);
+}
+
+/** 打开一条连接两点的航道（先横后竖或先竖后横的折线，带宽度） */
+export function lightCorridor(state: GameState, ax: number, ay: number, bx: number, by: number, xFirst: boolean): void {
+  const w = M.corridorHalfWidth;
+  const pts: [number, number][] = [];
+  let x = ax;
+  let y = ay;
+  pts.push([x, y]);
+  const stepX = () => {
+    while (x !== bx) {
+      x += Math.sign(bx - x);
+      pts.push([x, y]);
+    }
+  };
+  const stepY = () => {
+    while (y !== by) {
+      y += Math.sign(by - y);
+      pts.push([x, y]);
+    }
+  };
+  if (xFirst) {
+    stepX();
+    stepY();
+  } else {
+    stepY();
+    stepX();
   }
-  return isLitBy(sources, x, y);
-}
-
-export function canEnter(state: GameState, x: number, y: number, sources?: LightSource[]): boolean {
-  return inBounds(state, x, y) && isLit(state, x, y, sources);
+  for (const [px, py] of pts) for (let dy = -w; dy <= w; dy++) for (let dx = -w; dx <= w; dx++) light(state, px + dx, py + dy);
 }
 
 export function seenIdx(state: GameState, x: number, y: number): number {
@@ -60,7 +78,7 @@ export function isSeen(state: GameState, x: number, y: number): boolean {
   return state.seen[seenIdx(state, x, y)] === 1;
 }
 
-/** 标记视野并发现附近岛屿，返回新发现的岛 */
+/** 标记视野并发现附近岛屿（只发现已解锁、位于可探索海域里的岛），返回新发现的岛 */
 export function look(state: GameState): Island[] {
   const { x, y } = state.player;
   const r = M.seenRadius;
@@ -68,13 +86,13 @@ export function look(state: GameState): Island[] {
     for (let dx = -r; dx <= r; dx++) {
       const nx = x + dx;
       const ny = y + dy;
-      if (inBounds(state, nx, ny)) state.seen[seenIdx(state, nx, ny)] = 1;
+      if (isLit(state, nx, ny)) state.seen[seenIdx(state, nx, ny)] = 1;
     }
   }
   const found: Island[] = [];
   for (const i of state.islands) {
-    if (i.discovered) continue;
-    if (i.kind === 'bureau' && !state.flags.flightDone) continue;
+    if (i.discovered || !i.revealed) continue;
+    if (!isLit(state, i.x, i.y)) continue;
     if (Math.max(Math.abs(i.x - x), Math.abs(i.y - y)) <= M.discoverRadius) {
       i.discovered = true;
       found.push(i);
@@ -83,7 +101,7 @@ export function look(state: GameState): Island[] {
   return found;
 }
 
-/** 在可通行区域内 BFS 寻路（四方向），返回步数序列；用于测试和调试 */
+/** 在可通行区域内 BFS 寻路（四方向），返回步数序列；用于测试和脚本玩家 */
 export function findPath(
   state: GameState,
   sx: number,
@@ -93,7 +111,6 @@ export function findPath(
 ): { dx: number; dy: number }[] | null {
   const W = state.width;
   const H = state.height;
-  const sources = lightSources(state);
   const prev = new Int32Array(W * H).fill(-1);
   const start = sy * W + sx;
   const goal = ty * W + tx;
@@ -116,7 +133,7 @@ export function findPath(
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const n = ny * W + nx;
       if (prev[n] !== -1) continue;
-      if (!canEnter(state, nx, ny, sources)) continue;
+      if (!canEnter(state, nx, ny)) continue;
       prev[n] = c;
       q.push(n);
     }

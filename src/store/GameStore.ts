@@ -14,13 +14,19 @@ export class GameStore {
   paused = false;
   /** 调试用时间倍率 */
   speed = 1;
+  /** 欢迎页、剧情介绍等界面打开时暂停时间 */
+  blocked = false;
+  /** 启动时本地是否已有存档 */
+  readonly hadSave: boolean;
   private listeners = new Set<Listener>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private last = 0;
   private lastSave = 0;
 
   constructor(state?: GameState) {
-    this.state = state ?? loadFromStorage() ?? createGame();
+    const saved = state ?? loadFromStorage();
+    this.hadSave = !!saved;
+    this.state = saved ?? createGame();
   }
 
   subscribe = (fn: Listener) => {
@@ -58,7 +64,7 @@ export class GameStore {
 
   /** 是否在跑时间：页面可见、未暂停、没有过场 */
   get running(): boolean {
-    return !this.paused && !document.hidden && !this.state.cutscene;
+    return !this.paused && !this.blocked && !document.hidden && !this.state.cutscene;
   }
 
   private tick() {
@@ -84,6 +90,12 @@ export class GameStore {
   save = () => {
     saveToStorage(this.state);
   };
+
+  setBlocked(b: boolean) {
+    this.blocked = b;
+    this.last = performance.now();
+    this.bump();
+  }
 
   setPaused(p: boolean) {
     this.paused = p;

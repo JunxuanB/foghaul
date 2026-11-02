@@ -6,6 +6,8 @@ import { jobMsg } from '../../sim/people';
 import type { Stock, Where } from '../../sim/types';
 import { stockLoad } from '../../sim/util';
 import { useGame, useStore } from '../../store/hooks';
+import { has } from '../../sim/tutorial';
+import { ItemName } from './Tip';
 
 export interface Act {
   label: string;
@@ -24,7 +26,7 @@ export function ItemRows({ stock, acts, cap, empty }: { stock: Stock; acts: (id:
         const n = stock[id] ?? 0;
         return (
           <li key={id} className="row">
-            <span className="nm">{t('item.' + id)}</span>
+            <span className="nm"><ItemName id={id} /></span>
             <span className="meta">{cap ? `${n}/${cap(id)}` : `×${n}`}</span>
             <span className="acts">
               {acts(id, n).map((a, i) => (
@@ -85,13 +87,17 @@ export function Inventory() {
         <h2 className="h3">
           {t('ui.pack')} {stockLoad(p.pack)}/{BALANCE.inventory.packCap}
         </h2>
+        <p className="note">{t('ui.packNote')}</p>
         <ItemRows stock={p.pack} acts={acts('pack')} />
       </section>
-      <section>
-        <h2 className="h3">{p.hasRaft ? t('ui.holdCap', { n: stockLoad(p.hold), cap: p.holdCap }) : t('ui.noRaftYet')}</h2>
-        {p.hasRaft && <ItemRows stock={p.hold} acts={acts('hold')} />}
-      </section>
       {p.hasRaft && (
+        <section>
+          <h2 className="h3">{t('ui.holdCap', { n: stockLoad(p.hold), cap: p.holdCap })}</h2>
+          <p className="note">{t('ui.holdNote')}</p>
+          <ItemRows stock={p.hold} acts={acts('hold')} />
+        </section>
+      )}
+      {p.hasRaft && has(g, 'people') && (
         <section>
           <h2 className="h3">
             {t('ui.aboard')} {aboard.length}/{BALANCE.inventory.seats}

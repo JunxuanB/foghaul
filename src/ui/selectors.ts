@@ -31,9 +31,9 @@ export function islandStatus(state: GameState, isl: Island): { cls: Status; note
   return { cls: 'isle', note: null };
 }
 
-export function bar(v: number, max = 100): string {
-  const n = Math.max(0, Math.min(10, Math.round((v / max) * 10)));
-  return '█'.repeat(n) + '░'.repeat(10 - n);
+export function bar(v: number, max = 100, width = 10): string {
+  const n = Math.max(0, Math.min(width, Math.round((v / max) * width)));
+  return '█'.repeat(n) + '░'.repeat(width - n);
 }
 
 export function ratioBar(r: number): string {

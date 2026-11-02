@@ -61,7 +61,7 @@ export function SettingsDialog() {
             <div className="box box-stop" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <span>{t('ui.newGameConfirm')}</span>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="cmd lead" onClick={() => { store.newGame(); setConfirmNew(false); ui.close(); }}>{t('ui.newGameYes')}</button>
+                <button className="cmd lead" onClick={() => { setConfirmNew(false); ui.restart(); }}>{t('ui.newGameYes')}</button>
                 <button className="cmd" onClick={() => setConfirmNew(false)}>{t('ui.cancel')}</button>
               </div>
             </div>

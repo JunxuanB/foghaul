@@ -3,7 +3,7 @@ import { PART_IDS } from '../config/items';
 import type { Role } from '../config/recipes';
 import { ISLANDS } from '../config/world';
 import { partsCollected } from './endgame';
-import { needMsg } from './inventory';
+import { carried, needMsg } from './inventory';
 import { islandM, itemM, m, stockP, type Msg } from './msg';
 import { roleOf } from './people';
 import type { GameState } from './types';
@@ -43,6 +43,7 @@ function hintOr(state: GameState, id: string, fallback: string): Msg {
 
 export function objectives(state: GameState): Objective[] {
   const pilot = roleOf(state, 'pilot');
+  const home = findIsland(state, 'home')!;
   const parts = partsCollected(state);
   const o = (id: string, detail: Msg, done: boolean, p?: Record<string, never> | Parameters<typeof m>[1]): Objective => ({
     id,
@@ -51,7 +52,11 @@ export function objectives(state: GameState): Objective[] {
     done,
   });
   return [
-    o('raft', m('obj.raft.d', { n: BALANCE.home.raft.wood }), state.player.hasRaft),
+    o(
+      'raft',
+      m('obj.raft.d', { have: Math.min(BALANCE.home.raft.wood, carried(state, 'wood') + (home.stock.wood ?? 0)), n: BALANCE.home.raft.wood }),
+      state.player.hasRaft,
+    ),
     o('engineer', hintOr(state, 'stoneIsle', 'obj.lookAround'), rescued(state, 'engineer')),
     o('lumberjack', hintOr(state, 'forestIsle', 'obj.askEngineer'), rescued(state, 'lumberjack')),
     o(

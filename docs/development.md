@@ -21,8 +21,8 @@
 
 | 文件 | 覆盖内容 |
 | --- | --- |
-| `tests/worldgen.test.ts` | 200 个种子生成地图，检查边界和岛间距 |
-| `tests/opening.test.ts` | 造木筏、救工程师和伐木工；夜间掉血；死亡丢货和重生；存档往返；日志在两种语言下都能渲染 |
+| `tests/worldgen.test.ts` | 开局只放主岛和第一座岛；200 个种子把整条解锁链都放出来，检查边界、可达、间距 |
+| `tests/opening.test.ts` | 造木筏、救工程师和伐木工、一次只解锁一座岛；采集进背包、功能逐步出现；灯塔才打开村落的迷雾；夜间掉血；死亡丢货和重生；存档往返；日志双语渲染 |
 | `tests/i18n.test.ts` | 两个词典键一致、占位符一致；源码里字面量键都存在 |
 | `tests/playthrough.test.ts` | 用脚本玩家在 4 个种子上从新游戏打到汇报工作，并检查每步对应的目标已完成、全部日志可渲染 |
 | `tests/helpers.ts` | `must`、`sailTo`、`homeGather`、`keepAlive` 等测试工具 |
@@ -79,12 +79,13 @@
 
 ### 新增岛屿
 
-1. `config/world.ts` 的 `ISLANDS`：放在合适的位置（顺序就是发现顺序），设 `stage`、`kind`、群系、救援或招募需求。
-2. 词典加 `island.<id>` 和 `island.<id>.intro`。
-3. 乘客岛：需要对应的 `Role`；获救文字 `rescue.<role>.*`；`config/text.ts` 的 `RESCUE_HINT_TARGET` 决定救出后提示谁。
-4. 村落：还要在 `VILLAGES` 里定义，并在 `sim/villages.ts` 的 `ISLAND_OF` 里登记岛 id。
-5. 跑 `npm test`：地图生成测试会验证新岛能放得下、走得到；如果放不下，考虑调整 `B.map` 的距离参数或阶段。
-6. 更新 `sim/bot.ts` 的 `STEPS` 和 `sim/objectives.ts`（如果它属于主线）。
+1. `config/world.ts` 的 `ISLANDS`：加岛的模板（`kind`、群系、救援或招募需求）。
+2. `config/world.ts` 的 `REVEALS`：决定它**什么时候出现、在谁附近**——`anchor`（锚点岛）、`from`（谁告诉你方向）、`hint`（提示文字键，模板里用 `{where}`）、`place`（放置条件）、可选的 `open`（打开迷雾的条件，例如某座灯塔）。新条件类型要在 `RevealCond` 和 `sim/reveal.ts` 的 `condMet` 里实现。
+3. 词典加 `island.<id>`、`island.<id>.intro` 和提示文字。
+4. 乘客岛：需要对应的 `Role`，获救文字 `rescue.<role>.thanks/teach`。
+5. 村落：还要在 `VILLAGES` 里定义，并在 `sim/villages.ts` 的 `ISLAND_OF` 里登记岛 id。
+6. 跑 `npm test`：`worldgen.test.ts` 会把整条解锁链放出来，验证新岛放得下、走得到。
+7. 更新 `sim/bot.ts` 的 `STEPS` 和 `sim/objectives.ts`（如果它属于主线）。
 
 ### 新增村落请求或奖励
 
@@ -100,6 +101,11 @@
 ### 新增界面文字
 
 在 `zh.ts` 加键，`en.ts` 必须加同名键（否则类型检查失败）。界面里用 `t('ui.xxx', params)`；带高亮的用 `<T k="..." p={...} />` 或 `<M m={msg} />`。
+
+### 新增引导功能或提示
+
+- 想让某个按钮/面板“到时候才出现”：在 `sim/tutorial.ts` 的 `FEATURES` 加一项（条件 + 可选日志键），界面里用 `has(g, 'id')` 判断。
+- 想加一条情境提示：在 `TIPS` 里按优先级插入，并在两个词典加 `tip.<id>.title` 和 `tip.<id>.body`。
 
 ### 修改状态结构
 
