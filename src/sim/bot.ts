@@ -143,7 +143,7 @@ export const STEPS: BotStep[] = [
       const home = island(s, 'home');
       for (let i = 0; i < 4; i++) must(s, { t: 'gather', what: 'branch' });
       stockAdd(home.stock, 'wood', 8);
-      must(s, { t: 'buildRaft' });
+      must(s, { t: 'craft', recipe: 'raft' });
     },
   },
   { id: 'engineer', run: (s) => rescueAt(s, 'stoneIsle', [{ kind: 'item', item: 'fish', n: 3 }]) },

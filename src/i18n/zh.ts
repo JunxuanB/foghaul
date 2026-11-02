@@ -264,7 +264,7 @@ const zh = {
 
   // ---------------- 目标 ----------------
   'obj.raft': '造一只木筏',
-  "obj.raft.d": "在主岛点“掰树枝”收集木头（{have}/{n}），够了就点“造木筏”。顺手捞几条鱼，救人用得上。",
+  "obj.raft.d": "在主岛点“掰树枝”收集木头（{have}/{n}），够了就在<g>制作</g>里做木筏。顺手捞几条鱼，救人用得上。",
   'obj.engineer': '救出工程师',
   'obj.lumberjack': '救出伐木工',
   'obj.firstTraining': '招募原住民，完成第一次培训',
@@ -538,8 +538,7 @@ const zh = {
   "ui.branch": "掰树枝（{min} 分）",
   "ui.shoreFish": "浅滩捞鱼（{min} 分）",
   "ui.pickHerb": "采草药（剩 {n}）",
-  "ui.raftNeed": "造木筏需要 {cost}。现在有 {have}/{n}。",
-  "ui.buildRaft": "造木筏",
+  "ui.raftNeed": "木头 {have}/{n}。攒够了就去<g>制作</g>里做木筏。",
   "ui.farm": "农田",
   "ui.plot": "第 {n} 块地",
   "ui.plotEmpty": "空地",
@@ -744,7 +743,6 @@ const zh = {
   // ---------------- 新手引导与剧情解锁 ----------------
   "log.fogLifts": "灯塔的光扫过海面，迷雾退开了一片，一条新航道出现了。",
   "unlock.shoreFish": "浅滩里有鱼在游。徒手大概也能捞几条。",
-  "unlock.raftPlan": "树枝越攒越多。也许能扎成一只木筏。",
   "unlock.herb": "林子边上长着几株草药，嚼一嚼能止疼。",
   "unlock.wreck": "你绕着直升机残骸走了一圈：少了五样零件，得慢慢找回来。",
   "reveal.fisherIsle": "原住民比划着说：{where}有一座破渔村，有个人天天对着空网发呆。",
@@ -785,7 +783,7 @@ const zh = {
   "help.controls.title": "操作",
   "help.controls.body": "方向键或 WASD 移动，回车靠岸或出海，+/- 缩放地图，空格暂停。手机上用屏幕上的方向按钮。",
   "tip.start.title": "你醒了",
-  "tip.start.body": "先在主岛点<g>掰树枝</g>。攒够木头就能做木筏。右边的<g>当前目标</g>会一直告诉你下一步。",
+  "tip.start.body": "先在主岛点<g>掰树枝</g>。<g>当前目标</g>会一直告诉你下一步做什么。",
   "tip.raft.title": "可以出海了",
   "tip.raft.body": "点<g>出海</g>到海上，用方向键或屏幕上的方向按钮一格一格地走。走到岛上后点<g>靠岸</g>。",
   "tip.sea.title": "在海上",
@@ -841,6 +839,27 @@ const zh = {
   "ui.tab.log": "日志",
   "ui.unknownPassengers": "还有 {n} 位同伴下落不明。",
   "ui.whereabouts": "知道下落了",
+
+  // ---------------- 制作 ----------------
+  "recipe.raft": "木筏",
+  "unlock.craft": "树枝越攒越多。打开<g>制作</g>看看——也许能扎成一只木筏。",
+  "tip.craft.title": "制作",
+  "tip.craft.body": "<g>制作</g>标签里是你会做的东西，随时随地都能做：原料从身上和所在岛的仓库里扣。木头攒够 8 块，就在那里做一只木筏。以后从同伴和村落学到的配方也会出现在这里。",
+  "help.craft.title": "制作",
+  "help.craft.body": "学会的配方都在<g>制作</g>标签里，随时随地都能做：原料从身上和所在网络岛的仓库里一起扣，做好的东西放进背包。只有海水提炼得在网络内的岛上做，因为煮出来的水是散装的。标签上的数字表示现在能做几样。",
+  "ui.craftNote": "原料从你身上扣，做好的放进背包。",
+  "ui.craftNoteIsland": "原料从你身上和{isl}的仓库里一起扣，做好的放进背包。",
+  "ui.minutes": "{n} 分钟",
+  "ui.seawater": "海水",
+  "ui.toStorage": "进岛上仓库",
+  "ui.make": "做",
+  "ui.moreRecipes": "救出同伴、和村落打交道，会学到更多配方。",
+  "ui.tab.craft": "制作",
+  "ui.tab.craftN": "制作 · {n}",
+  "ui.raftReady": "木头够了（{have}/{n}）。去<g>制作</g>里做一只木筏吧。",
+  "ui.openCraft": "打开制作",
+  "ui.drinkSeaHint": "水 +5，生命 −20。哪里都能喝，但很伤身。",
+  "ui.fishSeaHint": "65% 抓到一条鱼，也可能被水母蛰。",
 };
 
 export default zh;

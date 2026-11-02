@@ -1,45 +1,80 @@
-import { RECIPES, RECIPE_ORDER } from '../../config/recipes';
-import { t } from '../../i18n';
-import { craftable } from '../../sim/actions';
-import { stockP } from '../../sim/msg';
-import type { Stock } from '../../sim/types';
+import { ITEMS, type ItemId } from '../../config/items';
+import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
+import { t, tm } from '../../i18n';
+import { canUseStock, craftBlock, here } from '../../sim/actions';
+import { costAvailable } from '../../sim/inventory';
 import { useGame, useStore } from '../../store/hooks';
-import { T } from '../components/Text';
+import { ItemName } from '../components/Tip';
 
-/** 玩家手动制作：原料从岛上库存和身上一起扣 */
+export function knownRecipes(g: ReturnType<typeof useGame>): RecipeId[] {
+  return RECIPE_ORDER.filter((r) => g.player.recipes.includes(r) && !RECIPES[r].noFacility && !(r === 'raft' && g.player.hasRaft));
+}
+
+/** 能做的配方数量（标签上的小数字） */
+export function craftableCount(g: ReturnType<typeof useGame>): number {
+  return knownRecipes(g).filter((r) => craftBlock(g, r) === null).length;
+}
+
+/** 制作面板：随时随地都能打开。原料从身上和所在的网络岛仓库一起扣。 */
 export function CraftPanel() {
   const g = useGame();
   const store = useStore();
-  const list = RECIPE_ORDER.filter((r) => g.player.recipes.includes(r) && !RECIPES[r].noFacility);
-  if (!list.length) return null;
+  const list = knownRecipes(g);
+  const isl = here(g);
+  const src = canUseStock(isl) ? isl : undefined;
   return (
-    <section>
-      <h3 className="h3">{t('ui.craft')}</h3>
-      <ul className="list" style={{ fontSize: 15 }}>
+    <section style={{ fontSize: 15 }}>
+      <p className="note">{src ? t('ui.craftNoteIsland', { isl: t('island.' + src.id) }) : t('ui.craftNote')}</p>
+      <ul className="list">
         {list.map((r) => {
           const def = RECIPES[r];
-          const ok = craftable(g, r);
-          const ins = Object.keys(def.inputs).length ? t('ui.recipeIO', { ins: stockP(def.inputs as Stock), outs: stockP(def.outputs as Stock) }) : t('ui.recipeOut', { outs: stockP(def.outputs as Stock) });
+          const block = craftBlock(g, r);
+          const ins = Object.entries(def.inputs) as [ItemId, number][];
+          const outs = Object.entries(def.outputs) as [ItemId, number][];
           return (
-            <li key={r} className="row">
-              <span className="nm">
-                {t('recipe.' + r)}
-                <span className="small" style={{ display: 'block' }}>
-                  <T k="ui.recipeLine" p={{ io: ins, min: def.manualMinutes }} />
-                </span>
-              </span>
-              <span className="acts">
-                <button className="cmd mini" disabled={!ok} onClick={() => store.dispatch({ t: 'craft', recipe: r, times: 1 })}>
-                  {t('ui.make1')}
+            <li key={r} className="row" style={{ alignItems: 'flex-start', padding: '10px 0', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', width: '100%', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                <strong>{t('recipe.' + r)}</strong>
+                <span className="small">{t('ui.minutes', { n: def.manualMinutes })}</span>
+              </div>
+              <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', color: 'var(--ink)' }}>
+                {ins.length === 0 && <span>{t('ui.seawater')}</span>}
+                {ins.map(([id, n]) => {
+                  const have = costAvailable(g, src, id);
+                  return (
+                    <span key={id} className={have >= n ? '' : 'tone-al'}>
+                      <ItemName id={id} /> {Math.min(have, 99)}/{n}
+                    </span>
+                  );
+                })}
+                <span>→</span>
+                {def.special === 'raft' ? (
+                  <span className="tone-g">{t('recipe.raft')}</span>
+                ) : (
+                  outs.map(([id, n]) => (
+                    <span key={id}>
+                      <ItemName id={id} /> ×{n}
+                      {!ITEMS[id].portable && <span className="small"> ({t('ui.toStorage')})</span>}
+                    </span>
+                  ))
+                )}
+              </div>
+              {block && <span className="small tone-al">{tm(block)}</span>}
+              <div className="acts" style={{ justifyContent: 'flex-start' }}>
+                <button className={'cmd mini' + (!block ? ' lead' : '')} disabled={!!block} onClick={() => store.dispatch({ t: 'craft', recipe: r, times: 1 })}>
+                  {def.special ? t('ui.make') : t('ui.make1')}
                 </button>
-                <button className="cmd mini" disabled={!ok} onClick={() => store.dispatch({ t: 'craft', recipe: r, times: 5 })}>
-                  {t('ui.make5')}
-                </button>
-              </span>
+                {!def.special && (
+                  <button className="cmd mini" disabled={!!block} onClick={() => store.dispatch({ t: 'craft', recipe: r, times: 5 })}>
+                    {t('ui.make5')}
+                  </button>
+                )}
+              </div>
             </li>
           );
         })}
       </ul>
+      <p className="small">{t('ui.moreRecipes')}</p>
     </section>
   );
 }

@@ -13,7 +13,7 @@ describe('opening', () => {
     expect(s.player.at).toBe('home');
     expect(dispatch(s, { t: 'leave' }).ok).toBe(false);
     homeGather(s, 8, 8);
-    must(s, { t: 'buildRaft' });
+    must(s, { t: 'craft', recipe: 'raft' });
     expect(s.player.hasRaft).toBe(true);
     // 采集到的东西进背包
     expect((s.player.pack.fish ?? 0) + (s.player.pack.wood ?? 0)).toBeGreaterThan(0);
@@ -35,6 +35,20 @@ describe('opening', () => {
     expect(s.player.recipes).toContain('bottledWater');
     expect(island(s, 'nativeA').revealed).toBe(true);
     expect(island(s, 'fisherIsle').revealed).toBe(false);
+  });
+
+  it('crafts anywhere: cups at sea, but distilling needs a network island', async () => {
+    const { runUntil } = await import('../src/sim/bot');
+    const { craftBlock } = await import('../src/sim/actions');
+    const s = runUntil(8, 'lumberjack');
+    must(s, { t: 'leave' });
+    s.player.pack = { wood: 3 };
+    s.player.hold = {};
+    must(s, { t: 'craft', recipe: 'cup', times: 2 });
+    expect(s.player.pack.cup).toBe(4);
+    expect(s.player.pack.wood).toBe(1);
+    expect(craftBlock(s, 'distill')?.k).toBe('err.needOwnedIsland');
+    expect(craftBlock(s, 'raft')?.k).toBe('err.hasRaft');
   });
 
   it('reveals interface features gradually', () => {
@@ -93,7 +107,7 @@ describe('opening', () => {
   it('renders all log lines in both languages without missing keys', () => {
     const s = createGame(12345);
     homeGather(s, 8, 8);
-    must(s, { t: 'buildRaft' });
+    must(s, { t: 'craft', recipe: 'raft' });
     for (const lang of ['zh', 'en'] as const) {
       setLang(lang);
       for (const l of s.log) {

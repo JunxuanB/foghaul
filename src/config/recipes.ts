@@ -23,6 +23,7 @@ export const ROLE_BIOME: Record<Role, Biome | null> = {
 };
 
 export type RecipeId =
+  | 'raft'
   | 'distill'
   | 'cup'
   | 'bottledWater'
@@ -46,11 +47,23 @@ export interface RecipeDef {
   batchesPerHour: number;
   /** 不能作为岛上设施（例如运输木筏只能由工程师手动建造） */
   noFacility?: boolean;
-  /** 只能玩家手动（海水提炼） */
+  /** 只能玩家手动（海水提炼、木筏） */
   manualOnly?: boolean;
+  /** 特殊产物：做出来的不是物品（木筏） */
+  special?: 'raft';
 }
 
 export const RECIPES: Record<RecipeId, RecipeDef> = {
+  raft: {
+    id: 'raft',
+    inputs: { wood: 8 },
+    outputs: {},
+    role: null,
+    manualMinutes: 60,
+    batchesPerHour: 0,
+    manualOnly: true,
+    special: 'raft',
+  },
   distill: {
     id: 'distill',
     inputs: {},
@@ -136,6 +149,7 @@ export const RECIPES: Record<RecipeId, RecipeDef> = {
 };
 
 export const RECIPE_ORDER: RecipeId[] = [
+  'raft',
   'distill',
   'cup',
   'bottledWater',

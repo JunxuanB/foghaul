@@ -25,7 +25,7 @@ import { canEnter, lightCircle, lightCorridor, look } from './map';
 import { checkReveals } from './reveal';
 import { updateUnlocks } from './tutorial';
 import { fail, OK, say } from './log';
-import { islandM, itemM, m, recipeM, roleM, stockP } from './msg';
+import { islandM, itemM, m, recipeM, roleM, stockP, type Msg } from './msg';
 import { headcountOf, isHungry, presentPeople, sameJob, teachableJobs } from './people';
 import { gainPlayerXp, playerLevel } from './progression';
 import { chance } from './rng';
@@ -174,19 +174,6 @@ function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'
   return OK;
 }
 
-function buildRaft(state: GameState): Result {
-  const isl = here(state);
-  if (!isl || isl.kind !== 'home') return fail('err.homeOnly');
-  if (state.player.hasRaft) return fail('err.hasRaft');
-  const cost = { wood: H.raft.wood };
-  if (!canPay(state, isl, cost)) return fail('err.missing', { list: stockP(missingCost(state, isl, cost)) });
-  pay(state, isl, cost);
-  state.player.hasRaft = true;
-  say(state, 'log.raftBuilt', 'got');
-  advance(state, H.raft.minutes);
-  return OK;
-}
-
 function plant(state: GameState, plot: number): Result {
   const isl = here(state);
   if (!isl || isl.kind !== 'home') return fail('err.homeOnly');
@@ -216,43 +203,50 @@ function harvest(state: GameState, plot: number): Result {
 
 // ---------------------------------------------------------------- 物品
 
-export function craftable(state: GameState, recipe: RecipeId): boolean {
+/** 制作前的检查：返回 null 表示可以做，否则返回原因。原料从身上和（网络内的）岛上仓库一起扣。 */
+export function craftBlock(state: GameState, recipe: RecipeId): Msg | null {
   const r = RECIPES[recipe];
-  if (r.noFacility) return false;
-  if (!state.player.recipes.includes(recipe)) return false;
+  if (!state.player.recipes.includes(recipe) || r.noFacility) return m('err.unknownRecipe');
+  if (r.special === 'raft' && state.player.hasRaft) return m('err.hasRaft');
   const isl = here(state);
-  if (!isl) return false;
-  const outsNotPortable = Object.keys(r.outputs).some((k) => !ITEMS[k as ItemId].portable);
-  if (outsNotPortable && !canUseStock(isl)) return false;
-  return canPay(state, canUseStock(isl) ? isl : undefined, r.inputs as Stock);
+  const src = canUseStock(isl) ? isl : undefined;
+  const bulk = Object.keys(r.outputs).some((k) => !ITEMS[k as ItemId].portable);
+  if (bulk && !src) return m('err.needOwnedIsland');
+  if (!canPay(state, src, r.inputs as Stock)) return m('err.missing', { list: stockP(missingCost(state, src, r.inputs as Stock)) });
+  if (bulk && src && Object.entries(r.outputs).some(([k, v]) => stockRoom(state, src, k as ItemId) < (v ?? 0))) return m('err.stockFull');
+  const carry = Object.entries(r.outputs).reduce((n, [k, v]) => n + (ITEMS[k as ItemId].portable ? v ?? 0 : 0), 0);
+  const freed = Object.values(r.inputs).reduce((n, v) => n + (v ?? 0), 0);
+  const room = packFree(state) + holdFree(state) + freed + (src ? 99 : 0);
+  if (carry > room) return m('err.noRoom');
+  return null;
 }
 
+export function craftable(state: GameState, recipe: RecipeId): boolean {
+  return craftBlock(state, recipe) === null;
+}
+
+/** 随时随地都能制作；散装产物（海水提炼的水）需要在网络内的岛上 */
 function craft(state: GameState, recipe: RecipeId, times = 1): Result {
   const r = RECIPES[recipe];
-  if (!state.player.recipes.includes(recipe) || r.noFacility) return fail('err.unknownRecipe');
+  const first = craftBlock(state, recipe);
+  if (first) return { ok: false, msg: first };
   const isl = here(state);
-  if (!isl) return fail('err.notDocked');
   const src = canUseStock(isl) ? isl : undefined;
-  const outsNotPortable = Object.keys(r.outputs).some((k) => !ITEMS[k as ItemId].portable);
-  if (outsNotPortable && !src) return fail('err.needOwnedIsland');
+  if (r.special === 'raft') {
+    pay(state, src, r.inputs as Stock);
+    state.player.hasRaft = true;
+    say(state, 'log.raftBuilt', 'got');
+    advance(state, r.manualMinutes);
+    return OK;
+  }
   let done = 0;
   const made: Stock = {};
   for (let i = 0; i < times; i++) {
-    if (!canPay(state, src, r.inputs as Stock)) {
-      if (done === 0) return fail('err.missing', { list: stockP(missingCost(state, src, r.inputs as Stock)) });
-      break;
-    }
-    // 能带走的产物放进背包（满了放货舱、再放岛上仓库），散装的水留在岛上仓库
-    const room = Object.entries(r.outputs).every(([k, v]) =>
-      src && !ITEMS[k as ItemId].portable ? stockRoom(state, src, k as ItemId) >= (v ?? 0) : true,
-    );
-    if (!room) {
-      if (done === 0) return fail('err.stockFull');
-      break;
-    }
+    if (i > 0 && craftBlock(state, recipe)) break;
     pay(state, src, r.inputs as Stock);
     for (const [k, v] of Object.entries(r.outputs)) {
       const id = k as ItemId;
+      // 能带走的产物放进背包（满了放货舱、再放岛上仓库），散装的水留在岛上仓库
       if (!ITEMS[id].portable && src) addToStock(state, src, id, v ?? 0);
       else giveToPlayer(state, id, v ?? 0, 'pack');
       stockAdd(made, id, v ?? 0);
@@ -710,8 +704,6 @@ function run(state: GameState, cmd: Command): Result {
       return OK;
     case 'gather':
       return gather(state, cmd.what);
-    case 'buildRaft':
-      return buildRaft(state);
     case 'craft':
       return craft(state, cmd.recipe, cmd.times);
     case 'consume':

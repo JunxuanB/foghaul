@@ -21,7 +21,7 @@ interface Feature {
 /** 顺序有意义：前面的出现后，后面的才可能出现 */
 export const FEATURES: Feature[] = [
   { id: 'shoreFish', when: (s) => wood(s) >= 2 || s.player.hasRaft, log: 'unlock.shoreFish' },
-  { id: 'raftPlan', when: (s) => wood(s) >= 3 || s.player.hasRaft, log: 'unlock.raftPlan' },
+  { id: 'craft', when: (s) => wood(s) >= 3 || s.player.hasRaft || s.player.recipes.length > 1, log: 'unlock.craft' },
   { id: 'herb', when: (s) => has(s, 'shoreFish') && (s.player.hp < 100 || carried(s, 'fish') > 0 || s.player.hasRaft), log: 'unlock.herb' },
   { id: 'sea', when: (s) => s.player.hasRaft },
   { id: 'wreck', when: (s) => s.player.hasRaft, log: 'unlock.wreck' },
@@ -29,7 +29,6 @@ export const FEATURES: Feature[] = [
   { id: 'islands', when: (s) => s.islands.some((i) => i.kind !== 'home' && i.discovered) },
   { id: 'people', when: (s) => s.people.some((p) => p.active) },
   { id: 'build', when: (s) => s.islands.some((i) => i.owned && i.kind !== 'home') },
-  { id: 'craft', when: (s) => s.player.recipes.length > 0 },
   { id: 'farm', when: (s) => !!roleOf(s, 'farmer')?.active },
   { id: 'routes', when: (s) => !!roleOf(s, 'pilot')?.active },
 ];
@@ -57,7 +56,8 @@ const at = (s: GameState) => (s.player.at ? island(s, s.player.at) : undefined);
 
 /** 按优先级排列；同一时间只显示第一条满足条件、没被关闭的 */
 export const TIPS: Tip[] = [
-  { id: 'start', when: (s) => !s.player.hasRaft && s.player.at === 'home' },
+  { id: 'start', when: (s) => !s.player.hasRaft && s.player.at === 'home' && !has(s, 'craft') },
+  { id: 'craft', when: (s) => !s.player.hasRaft && has(s, 'craft') },
   { id: 'raft', when: (s) => s.player.hasRaft && s.stats.moves === 0 && s.player.at === 'home' },
   { id: 'sea', when: (s) => !s.player.at && s.stats.moves < 30 },
   { id: 'night', when: (s) => s.player.hasRaft && minuteOfDay(s.time) >= 18 * 60 && s.time < 3 * 1440 },

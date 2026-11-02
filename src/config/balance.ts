@@ -90,7 +90,6 @@ export const BALANCE = {
     chop: { minutes: 30, wood: 3 }, // 伐木工获救后
     shoreFish: { minutes: 30, chance: 0.6 },
     herb: { minutes: 15, total: 5 },
-    raft: { wood: 8, minutes: 60 },
     farm: { plots: 3, plantMinutes: 15, growMinutes: 24 * 60, yield: 6 },
     /** 主岛仓库上限（每种物品） */
     stockCap: 99,

@@ -260,7 +260,7 @@ const en: Dict = {
   'need.food': 'Food',
 
   'obj.raft': 'Build a raft',
-  "obj.raft.d": "Tap \"Snap branch\" on Home Island to collect wood ({have}/{n}), then \"Build raft\". Catch a few fish too — you will need them.",
+  "obj.raft.d": "Tap \"Snap branch\" to collect wood ({have}/{n}), then make a raft under <g>Craft</g>. Catch a few fish too — you will need them.",
   'obj.engineer': 'Rescue the engineer',
   'obj.lumberjack': 'Rescue the lumberjack',
   'obj.firstTraining': 'Recruit an islander and train them',
@@ -532,8 +532,7 @@ const en: Dict = {
   "ui.branch": "Snap branch ({min}m)",
   "ui.shoreFish": "Fish the shallows ({min}m)",
   "ui.pickHerb": "Pick herb ({n} left)",
-  "ui.raftNeed": "A raft needs {cost}. You have {have}/{n}.",
-  "ui.buildRaft": "Build raft",
+  "ui.raftNeed": "Wood {have}/{n}. When you have enough, make a raft under <g>Craft</g>.",
   "ui.farm": "Farm",
   "ui.plot": "Plot {n}",
   "ui.plotEmpty": "Empty",
@@ -738,7 +737,6 @@ const en: Dict = {
   // ---------------- 新手引导与剧情解锁 ----------------
   "log.fogLifts": "The lighthouse beam sweeps the sea. The fog parts, and a new channel opens.",
   "unlock.shoreFish": "Fish are darting through the shallows. You could probably scoop a few out by hand.",
-  "unlock.raftPlan": "The branches are piling up. You could lash them into a raft.",
   "unlock.herb": "A few herbs grow at the edge of the woods. Chewing them dulls the pain.",
   "unlock.wreck": "You walk around the wreck: five parts are missing. You will have to find them.",
   "reveal.fisherIsle": "The islander gestures: there is a run-down fishing village {where}, where someone stares at empty nets all day.",
@@ -779,7 +777,7 @@ const en: Dict = {
   "help.controls.title": "Controls",
   "help.controls.body": "Arrow keys or WASD to move, Enter to land or set sail, +/- to zoom, Space to pause. On mobile, use the on-screen arrows.",
   "tip.start.title": "You are awake",
-  "tip.start.body": "Start by tapping <g>Snap branch</g>. Enough wood makes a raft. The <g>current goal</g> always tells you what is next.",
+  "tip.start.body": "Start by tapping <g>Snap branch</g>. The <g>current goal</g> always tells you what to do next.",
   "tip.raft.title": "Ready to sail",
   "tip.raft.body": "Tap <g>Set sail</g>, then move one tile at a time with the arrow keys or the on-screen arrows. On an island tile, tap <g>Land</g>.",
   "tip.sea.title": "At sea",
@@ -835,6 +833,27 @@ const en: Dict = {
   "ui.tab.log": "Log",
   "ui.unknownPassengers": "{n} companions are still missing.",
   "ui.whereabouts": "Location known",
+
+  // ---------------- 制作 ----------------
+  "recipe.raft": "Raft",
+  "unlock.craft": "The branches are piling up. Open <g>Craft</g> — maybe they can be lashed into a raft.",
+  "tip.craft.title": "Crafting",
+  "tip.craft.body": "The <g>Craft</g> tab lists everything you know how to make, anywhere, any time — ingredients come from what you carry and the island storage where you are. With 8 wood, make a raft there. Recipes learned from companions and villages will show up here too.",
+  "help.craft.title": "Crafting",
+  "help.craft.body": "Every recipe you know is in the <g>Craft</g> tab and can be made anywhere: ingredients come from what you carry plus the storage of the network island you are on, and results go into your pack. Only seawater distilling needs a network island, because the water is loose. The number on the tab shows how many recipes you can make right now.",
+  "ui.craftNote": "Ingredients come from what you carry; results go into your pack.",
+  "ui.craftNoteIsland": "Ingredients come from what you carry and {isl} storage; results go into your pack.",
+  "ui.minutes": "{n} min",
+  "ui.seawater": "Seawater",
+  "ui.toStorage": "to island storage",
+  "ui.make": "Make",
+  "ui.moreRecipes": "Rescue companions and deal with villages to learn more recipes.",
+  "ui.tab.craft": "Craft",
+  "ui.tab.craftN": "Craft · {n}",
+  "ui.raftReady": "Enough wood ({have}/{n}). Make a raft under <g>Craft</g>.",
+  "ui.openCraft": "Open Craft",
+  "ui.drinkSeaHint": "Water +5, HP −20. Works anywhere, but it hurts.",
+  "ui.fishSeaHint": "65% chance of a fish; you might get stung.",
 };
 
 export default en;

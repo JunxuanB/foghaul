@@ -130,23 +130,24 @@ App（UiContext：当前弹窗、地图缩放、主题、语言、restart；键�
 ├─ screens/Welcome（选语言、继续 / 新的旅程）
 ├─ screens/Intro（新游戏的背景故事 + 怎么玩）
 └─ 游戏界面（screen === 'game'）
-├─ Header（窄屏时收进“菜单”）（时钟、昼夜条、入夜倒计时、面板按钮、暂停、生命/水/食物）
+├─ Header（窄屏时收进“菜单”；常驻 喝海水 / 跳海捕鱼）（时钟、昼夜条、入夜倒计时、面板按钮、暂停、生命/水/食物）
 ├─ SeaScene（player.at 为 null）
 │   ├─ LogView + 情境操作（捞起来、靠岸）+ 喝海水/跳海捕鱼 + ObjectiveCard
 │   ├─ MapPanel → MapView（网格、岛屿标记、航线、船、玩家、目标虚线、边缘提示、选目标）
-│   └─ Inventory（背包、货舱、随船人员）
+│   └─ SidePanel（“物品 / 制作”标签：Inventory、CraftPanel）
 ├─ IslandScene（player.at 不为 null）
 │   ├─ 标题行（睡觉、等 1 小时、乘飞机、出海）+ Alerts
 │   ├─ 按岛类型：HomePanel / NeedList（救援、招募）/ VillagePanel / BureauPanel
-│   ├─ 设施、人员（培训/转岗/接走）、库存、建设、制作（CraftPanel）、码头
-│   └─ ObjectiveCard + Inventory
+│   ├─ 设施、人员（培训/转岗/接走）、仓库、建设、码头
+│   └─ ObjectiveCard + SidePanel
 ├─ TipBox（情境提示，场景顶部）
 ├─ 弹窗（原生 <dialog>）：People / Islands / Routes / Journal / Help / Settings
 ├─ Cutscene（试飞、结局）
 └─ DevPanel（仅开发模式或 ?debug）
 ```
 
-- 窄屏（≤760px，`ui/hooks.ts` 的 `useNarrow`）时，场景改为单列 + 标签页（`components/Tabs.tsx`），弹窗全屏。
+- 窄屏（≤760px，`ui/hooks.ts` 的 `useNarrow`）时，场景改为单列 + 标签页（`components/SidePanel.tsx` 的 `MobileTabs`），弹窗全屏。
+- 侧栏/底部标签的当前页存在 `UiContext.sideTab`，任何组件都可以 `ui.setSideTab('craft')` 把玩家引到制作页（主岛的造木筏提示就是这样做的）。
 - 物品名统一用 `components/Tip.tsx` 的 `<ItemName id>` 渲染，自带说明气泡。
 - 功能是否显示看 `has(state, 'xxx')`（`sim/tutorial.ts`），不要在组件里另写一套“该不该显示”的条件。
 - `ui/selectors.ts`：`islandStatus()` 把岛屿归为 运转中 / 需要处理 / 停工 / 其他，地图和总览共用；`bar()` 画字符进度条。

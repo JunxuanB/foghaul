@@ -212,7 +212,6 @@ export type Command =
   | { t: 'fishSea' }
   | { t: 'takeCrate' }
   | { t: 'gather'; what: 'branch' | 'chop' | 'shoreFish' | 'herb' }
-  | { t: 'buildRaft' }
   | { t: 'craft'; recipe: RecipeId; times?: number }
   | { t: 'consume'; from: Where; item: ItemId }
   | { t: 'transfer'; item: ItemId; from: Where; to: Where; n: number }

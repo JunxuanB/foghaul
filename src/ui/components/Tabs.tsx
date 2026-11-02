@@ -7,8 +7,10 @@ export interface TabDef {
 }
 
 /** 手机布局用的简单标签页 */
-export function Tabs({ tabs, initial }: { tabs: TabDef[]; initial?: string }) {
-  const [cur, setCur] = useState(initial ?? tabs[0]?.id);
+export function Tabs({ tabs, initial, value, onChange }: { tabs: TabDef[]; initial?: string; value?: string; onChange?: (id: string) => void }) {
+  const [own, setOwn] = useState(initial ?? tabs[0]?.id);
+  const cur = value ?? own;
+  const setCur = (id: string) => (onChange ? onChange(id) : setOwn(id));
   const sel = tabs.find((x) => x.id === cur) ?? tabs[0];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

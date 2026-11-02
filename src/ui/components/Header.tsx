@@ -46,6 +46,21 @@ function useNav(): [DialogKind, string][] {
   return out;
 }
 
+/** 随时随地的求生动作：喝海水、跳海捕鱼 */
+function Survival() {
+  const store = useStore();
+  return (
+    <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+      <button className="cmd mini" onClick={() => store.dispatch({ t: 'drinkSea' })} title={t('ui.drinkSeaHint')}>
+        {t('ui.drinkSea')}
+      </button>
+      <button className="cmd mini" onClick={() => store.dispatch({ t: 'fishSea' })} title={t('ui.fishSeaHint')}>
+        {t('ui.fishSea')}
+      </button>
+    </span>
+  );
+}
+
 function Stats({ compact }: { compact: boolean }) {
   const g = useGame();
   const p = g.player;
@@ -105,7 +120,10 @@ export function Header() {
             {pauseBtn}
           </nav>
         )}
-        <Stats compact />
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Stats compact />
+          <Survival />
+        </div>
       </header>
     );
   }
@@ -126,7 +144,10 @@ export function Header() {
           {pauseBtn}
         </nav>
       </div>
-      <Stats compact={false} />
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 28px' }}>
+        <Stats compact={false} />
+        <Survival />
+      </div>
     </header>
   );
 }

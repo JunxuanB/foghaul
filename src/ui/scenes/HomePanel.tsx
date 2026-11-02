@@ -1,7 +1,9 @@
 import { BALANCE } from '../../config/balance';
 import { PART_IDS } from '../../config/items';
 import { t } from '../../i18n';
-import { plotReady } from '../../sim/actions';
+import { craftable, plotReady } from '../../sim/actions';
+import { RECIPES } from '../../config/recipes';
+import { useUi } from '../ui';
 import { hmParts } from '../../sim/clock';
 import { canPay, carried } from '../../sim/inventory';
 import { stockP } from '../../sim/msg';
@@ -21,13 +23,14 @@ export function HomePanel() {
   const home = island(g, 'home');
   const lumber = g.people.find((p) => p.role === 'lumberjack')?.active;
   const farmer = g.people.find((p) => p.role === 'farmer')?.active;
-  const raftCost = { wood: H.raft.wood };
+  const ui = useUi();
+  const raftWood = RECIPES.raft.inputs.wood ?? 0;
   const pilotHere = presentPeople(g).some((p) => p.role === 'pilot');
   const installed = g.flags.partsInstalled;
   const repairCost = BALANCE.endgame.repairCost as Stock;
   const wood = carried(g, 'wood') + (home.stock.wood ?? 0);
-  const canRaft = canPay(g, home, raftCost);
-  const showRaft = !g.player.hasRaft && has(g, 'raftPlan');
+  const canRaft = craftable(g, 'raft');
+  const showRaft = !g.player.hasRaft && has(g, 'craft');
   return (
     <div className="grid2" style={{ fontSize: 15 }}>
       <section>
@@ -56,10 +59,10 @@ export function HomePanel() {
         {showRaft && (
           <div className="box box-alert" style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
             <span>
-              <T k="ui.raftNeed" p={{ have: Math.min(wood, H.raft.wood), n: H.raft.wood, cost: stockP(raftCost) }} />
+              <T k={canRaft ? 'ui.raftReady' : 'ui.raftNeed'} p={{ have: Math.min(wood, raftWood), n: raftWood }} />
             </span>
-            <button className={'cmd' + (canRaft ? ' lead' : '')} disabled={!canRaft} onClick={() => store.dispatch({ t: 'buildRaft' })}>
-              {t('ui.buildRaft')}
+            <button className={'cmd' + (canRaft ? ' lead' : '')} onClick={() => ui.setSideTab('craft')}>
+              {t('ui.openCraft')}
             </button>
           </div>
         )}

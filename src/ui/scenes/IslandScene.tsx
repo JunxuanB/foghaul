@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BALANCE } from '../../config/balance';
 import { RECIPES } from '../../config/recipes';
 import { ISLANDS } from '../../config/world';
@@ -13,17 +13,16 @@ import { personLevel } from '../../sim/progression';
 import type { Island, Job, Person } from '../../sim/types';
 import { villageOf } from '../../sim/villages';
 import { useGame, useStore } from '../../store/hooks';
-import { Inventory, ItemRows, useItemActs } from '../components/Inventory';
+import { ItemRows, useItemActs } from '../components/Inventory';
 import { LogView } from '../components/LogView';
 import { ObjectiveCard } from '../components/Objective';
 import { M, T } from '../components/Text';
 import { useUi } from '../ui';
 import { useNarrow } from '../hooks';
-import { Tabs } from '../components/Tabs';
+import { MobileTabs, SidePanel } from '../components/SidePanel';
 import { TipBox } from '../components/Tip';
 import { has } from '../../sim/tutorial';
 import { BureauPanel } from './BureauPanel';
-import { CraftPanel } from './CraftPanel';
 import { HomePanel } from './HomePanel';
 import { NeedList } from './NeedPanel';
 import { VillagePanel } from './VillagePanel';
@@ -32,7 +31,12 @@ export function IslandScene() {
   const g = useGame();
   const store = useStore();
   const narrow = useNarrow();
+  const ui = useUi();
   const isl = here(g)!;
+  useEffect(() => {
+    if (narrow) ui.setSideTab('isle');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isl.id, narrow]);
   const owned = canUseStock(isl);
   const vid = villageOf(isl);
   const tpl = ISLANDS.find((x) => x.id === isl.id)!;
@@ -67,7 +71,6 @@ export function IslandScene() {
         <PeopleSection isl={isl} />
         {showStock && <StockSection isl={isl} />}
         {showBuild && <BuildSection isl={isl} />}
-        {has(g, 'craft') && <CraftPanel />}
         <DockSection isl={isl} />
       </div>
     </>
@@ -94,14 +97,6 @@ export function IslandScene() {
     </div>
   );
 
-  const seaside = (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 15 }}>
-      <span className="small">{t('ui.seaside')}</span>
-      <button className="cmd mini" onClick={() => store.dispatch({ t: 'drinkSea' })}>{t('ui.drinkSea')}</button>
-      <button className="cmd mini" onClick={() => store.dispatch({ t: 'fishSea' })}>{t('ui.fishSea')}</button>
-    </div>
-  );
-
   if (narrow) {
     return (
       <main style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -109,13 +104,7 @@ export function IslandScene() {
         <TipBox />
         <LogView count={2} big={false} />
         <ObjectiveCard />
-        <Tabs
-          tabs={[
-            { id: 'isle', label: t('ui.tab.island'), node: <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>{main}{seaside}</div> },
-            { id: 'items', label: t('ui.tab.items'), node: <Inventory /> },
-            { id: 'log', label: t('ui.tab.log'), node: <LogView count={8} big={false} /> },
-          ]}
-        />
+        <MobileTabs island={{ id: 'isle', label: t('ui.tab.island'), node: <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>{main}</div> }} />
       </main>
     );
   }
@@ -126,14 +115,13 @@ export function IslandScene() {
         {head}
         <TipBox />
         {main}
-        {seaside}
         <div style={{ borderTop: '1px dashed var(--line)', paddingTop: 14 }}>
           <LogView count={4} big={false} />
         </div>
       </section>
       <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
         <ObjectiveCard />
-        <Inventory />
+        <SidePanel />
       </div>
     </main>
   );

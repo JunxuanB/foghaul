@@ -1,11 +1,10 @@
 import { t } from '../../i18n';
 import { islandAt } from '../../sim/util';
 import { useGame, useStore } from '../../store/hooks';
-import { Inventory } from '../components/Inventory';
 import { LogView } from '../components/LogView';
 import { MapPanel } from '../components/MapPanel';
 import { ObjectiveCard } from '../components/Objective';
-import { Tabs } from '../components/Tabs';
+import { MobileTabs, SidePanel } from '../components/SidePanel';
 import { TipBox } from '../components/Tip';
 import { useNarrow } from '../hooks';
 
@@ -27,10 +26,6 @@ function SeaActions() {
         )}
         {!g.pendingCrate && !onIsle && <span style={{ fontSize: 15, color: 'var(--dim)' }}>{t('ui.calm')}</span>}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <button className="cmd" onClick={() => store.dispatch({ t: 'drinkSea' })}>{t('ui.drinkSea')}</button>
-        <button className="cmd" onClick={() => store.dispatch({ t: 'fishSea' })}>{t('ui.fishSea')}</button>
-      </div>
     </div>
   );
 }
@@ -45,12 +40,7 @@ export function SeaScene() {
         <MapPanel />
         <SeaActions />
         <ObjectiveCard />
-        <Tabs
-          tabs={[
-            { id: 'items', label: t('ui.tab.items'), node: <Inventory /> },
-            { id: 'log', label: t('ui.tab.log'), node: <LogView count={8} big={false} /> },
-          ]}
-        />
+        <MobileTabs />
       </main>
     );
   }
@@ -65,7 +55,7 @@ export function SeaScene() {
         <ObjectiveCard />
       </section>
       <MapPanel />
-      <Inventory />
+      <SidePanel />
     </main>
   );
 }

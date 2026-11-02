@@ -14,7 +14,7 @@ import { Welcome } from './screens/Welcome';
 import { Intro } from './screens/Intro';
 import { IslandScene } from './scenes/IslandScene';
 import { SeaScene } from './scenes/SeaScene';
-import { UiContext, type DialogKind, type Ui } from './ui';
+import { UiContext, type DialogKind, type SideTab, type Ui } from './ui';
 import { BALANCE } from '../config/balance';
 
 const THEME_KEY = 'foghaul.theme';
@@ -41,6 +41,7 @@ export function App() {
   const [theme, setThemeState] = useState(initialTheme);
   const [lang, setLangState] = useState<Lang>(getLang());
   const startedFresh = useRef(false);
+  const [sideTab, setSideTab] = useState<SideTab>('items');
 
   const ui: Ui = useMemo(
     () => ({
@@ -63,6 +64,8 @@ export function App() {
         }
       },
       lang,
+      sideTab,
+      setSideTab,
       restart: () => {
         store.newGame();
         startedFresh.current = true;
@@ -74,7 +77,7 @@ export function App() {
         setLangState(l);
       },
     }),
-    [dialog, dialogArg, zoom, theme, lang, store],
+    [dialog, dialogArg, zoom, theme, lang, store, sideTab],
   );
 
   // 欢迎页和剧情介绍时暂停时间

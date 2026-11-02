@@ -1,5 +1,8 @@
 import { BALANCE } from '../config/balance';
 import { PART_IDS } from '../config/items';
+import { RECIPES } from '../config/recipes';
+
+const RAFT_WOOD = RECIPES.raft.inputs.wood ?? 0;
 import type { Role } from '../config/recipes';
 import { ISLANDS } from '../config/world';
 import { partsCollected } from './endgame';
@@ -54,7 +57,7 @@ export function objectives(state: GameState): Objective[] {
   return [
     o(
       'raft',
-      m('obj.raft.d', { have: Math.min(BALANCE.home.raft.wood, carried(state, 'wood') + (home.stock.wood ?? 0)), n: BALANCE.home.raft.wood }),
+      m('obj.raft.d', { have: Math.min(RAFT_WOOD, carried(state, 'wood') + (home.stock.wood ?? 0)), n: RAFT_WOOD }),
       state.player.hasRaft,
     ),
     o('engineer', hintOr(state, 'stoneIsle', 'obj.lookAround'), rescued(state, 'engineer')),

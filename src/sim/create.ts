@@ -105,7 +105,7 @@ export function createGame(seed: number = newSeed()): GameState {
       aboard: [],
       xp: { sail: 0, attack: 0, manage: 0 },
       weapons: [],
-      recipes: [],
+      recipes: ['raft'],
       target: null,
       twoStep: true,
     },
