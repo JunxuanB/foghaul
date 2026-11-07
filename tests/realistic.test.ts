@@ -1,6 +1,7 @@
 // 不作弊的开局试玩：不补物资、不保命，按一个普通玩家的思路玩到救出伐木工并修好第二座灯塔。
 // 用来检查开局的数值和流程能不能走通。
 import { describe, expect, it } from 'vitest';
+import { approach } from '../src/sim/interact';
 import { dispatch } from '../src/sim/actions';
 import { minuteOfDay, dayOf } from '../src/sim/clock';
 import { createGame } from '../src/sim/create';
@@ -9,6 +10,7 @@ import type { Command, GameState } from '../src/sim/types';
 import { island } from '../src/sim/util';
 
 function act(s: GameState, c: Command) {
+  approach(s, c);
   const r = dispatch(s, c);
   if (!r.ok) throw new Error(JSON.stringify(c) + ' → ' + JSON.stringify(r.msg));
 }

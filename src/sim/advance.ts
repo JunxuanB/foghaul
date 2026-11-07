@@ -9,6 +9,8 @@ import { tickTransport } from './transport';
 import { learnRecipe } from './progression';
 import { checkReveals } from './reveal';
 import { updateUnlocks } from './tutorial';
+import { placeAtBed } from './interact';
+import { dailyForage } from './forage';
 import type { GameState } from './types';
 import { findIsland, island, manhattan, stockAdd } from './util';
 
@@ -44,7 +46,10 @@ function survive(state: GameState, minutes: number, opts: AdvanceOpts): void {
 function hourly(state: GameState): void {
   const m = minuteOfDay(state.time);
   if (BALANCE.economy.mealTimes.includes(m)) meal(state);
-  if (m === BALANCE.time.dayStart) births(state);
+  if (m === BALANCE.time.dayStart) {
+    births(state);
+    dailyForage(state);
+  }
   sleepyCheck(state);
   bureauHourly(state);
 }
@@ -122,6 +127,7 @@ export function die(state: GameState): void {
   p.x = bed.x;
   p.y = bed.y;
   p.at = bed.id;
+  placeAtBed(state, bed.id);
   p.hp = S.death.respawnHp;
   p.water = Math.max(p.water, S.death.minWater);
   p.food = Math.max(p.food, S.death.minFood);

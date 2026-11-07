@@ -2,7 +2,7 @@
 // 功能一旦出现就记进 state.unlocks，不会因为条件反复而消失。
 import { carried } from './inventory';
 import { say } from './log';
-import { roleOf } from './people';
+import { updateGuide } from './guide';
 import type { GameState } from './types';
 import { island, stockGet } from './util';
 import { minuteOfDay } from './clock';
@@ -19,28 +19,22 @@ interface Feature {
   log?: string;
 }
 
-/** 顺序有意义：前面的出现后，后面的才可能出现 */
+/** 2D 版 HUD 元素逐步出现（docs/2d-design.md 第 8 节“功能逐步出现”）。顺序有意义 */
 export const FEATURES: Feature[] = [
-  // 第一根树枝之后才出现“当前目标”和背包
-  { id: 'goal', when: (s) => wood(s) >= 1 || s.player.hasRaft },
-  // 第二件事做完（时间过去半小时）后只引入时钟和昼夜
+  // 走出 3 格之后出现当前目标
+  { id: 'goal', when: (s) => s.walk.moved >= BALANCE.interact.walkTilesForGoal * 16 || s.player.hasRaft },
+  // 拿到第一样东西后出现快捷栏
+  { id: 'hotbar', when: (s) => Object.values(s.player.pack).some((n) => (n ?? 0) > 0) || s.player.hasRaft },
+  // 开局半小时后出现时间
   { id: 'clock', when: (s) => s.time >= BALANCE.time.startMinute + 30 || s.player.hasRaft, log: 'unlock.clock' },
   // 快要出海时（木头差不多够造木筏），或者真的渴了饿了，才出现生命、水、食物
-  { id: 'vitals', when: (s) => (has(s, 'clock') && wood(s) >= 6) || s.player.hasRaft || s.player.water < 50 || s.player.food < 45, log: 'unlock.vitals' },
-  // 渴了才想到喝海水
-  { id: 'seawater', when: (s) => has(s, 'vitals') && (s.player.water <= 55 || s.player.hasRaft), log: 'unlock.seawater' },
-  { id: 'dive', when: (s) => s.player.hasRaft },
-  { id: 'shoreFish', when: (s) => wood(s) >= 2 || s.player.hasRaft, log: 'unlock.shoreFish' },
-  { id: 'craft', when: (s) => wood(s) >= 3 || s.player.hasRaft || s.player.recipes.length > 1, log: 'unlock.craft' },
-  { id: 'herb', when: (s) => has(s, 'shoreFish') && (s.player.hp < 100 || carried(s, 'fish') > 0 || s.player.hasRaft), log: 'unlock.herb' },
-  { id: 'sea', when: (s) => s.player.hasRaft },
-  { id: 'wreck', when: (s) => s.player.hasRaft, log: 'unlock.wreck' },
-  { id: 'sleep', when: (s) => s.player.hasRaft || minuteOfDay(s.time) >= 18 * 60 || s.time >= 1440 },
-  { id: 'islands', when: (s) => s.islands.some((i) => i.kind !== 'home' && i.discovered) },
+  { id: 'vitals', when: (s) => wood(s) >= 6 || s.player.hasRaft || s.player.water < 50 || s.player.food < 45, log: 'unlock.vitals' },
+  // 第一次有不是开场白的日志
+  { id: 'log', when: (s) => has(s, 'goal') && s.log.some((l) => !l.m.k.startsWith('opening.')) },
+  // 第一次出海后出现海图
+  { id: 'map', when: (s) => s.stats.moves > 0 },
+  // 救出第一位同伴后出现人物面板
   { id: 'people', when: (s) => s.people.some((p) => p.active) },
-  { id: 'build', when: (s) => s.islands.some((i) => i.owned && i.kind !== 'home') },
-  { id: 'farm', when: (s) => !!roleOf(s, 'farmer')?.active },
-  { id: 'routes', when: (s) => !!roleOf(s, 'pilot')?.active },
 ];
 
 export function has(state: GameState, id: string): boolean {
@@ -48,6 +42,7 @@ export function has(state: GameState, id: string): boolean {
 }
 
 export function updateUnlocks(state: GameState): void {
+  updateGuide(state);
   for (const f of FEATURES) {
     if (has(state, f.id) || !f.when(state)) continue;
     state.unlocks.push(f.id);

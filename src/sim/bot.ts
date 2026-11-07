@@ -1,6 +1,7 @@
 // 脚本玩家：只通过正式命令推进主线。用于调试面板的里程碑预设和自动通关测试。
 // 为了不依赖数值，它会“作弊”补足交付所需的物资并保命，但所有进度判定都走正式规则。
 import type { ItemId } from '../config/items';
+import { approach } from './interact';
 import { PART_IDS } from '../config/items';
 import { VILLAGES, type Need, type VillageId } from '../config/world';
 import { dispatch } from './actions';
@@ -16,6 +17,7 @@ import { revealOf } from './reveal';
 export class BotError extends Error {}
 
 function must(s: GameState, cmd: Command): void {
+  approach(s, cmd);
   const r = dispatch(s, cmd);
   if (!r.ok) throw new BotError(`${JSON.stringify(cmd)} → ${JSON.stringify(r.msg)}`);
 }

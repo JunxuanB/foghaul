@@ -148,9 +148,46 @@ export interface PlayerState {
   twoStep: boolean;
 }
 
+export type Facing = 'down' | 'up' | 'left' | 'right';
+
+export type ForageKind = 'tree' | 'herb';
+
+/** 2D：可刷新的采集点（树、草药丛）。left 为还能采几次（树按木头根数），0 表示采完（树桩 / 空草丛，第二天早上清掉） */
+export interface ForageNode {
+  id: string;
+  kind: ForageKind;
+  sprite: string;
+  x: number;
+  y: number;
+  left: number;
+}
+
+/** 2D：人物在岛上的位置（像素，脚底中点）。画面层每帧写回，规则只在动作发生时读 */
+export interface Walk {
+  island: string;
+  x: number;
+  y: number;
+  facing: Facing;
+  /** 累计走过的距离（像素），引导第 1 步用 */
+  moved: number;
+}
+
 export interface PendingCrate {
   loot: Stock;
   text: Msg | null;
+  /** 2D：漂流物在海面上的位置（像素）。文字版的格子移动不设 */
+  x?: number;
+  y?: number;
+}
+
+/** 最近一次海上战斗（界面用来显示一张小卡片） */
+export interface FightRecord {
+  foe: 'bees' | 'shark';
+  mine: number;
+  theirs: number;
+  win: boolean;
+  /** 发生的游戏时间 */
+  at: number;
 }
 
 export interface GameState {
@@ -178,9 +215,23 @@ export interface GameState {
   /** 等待用全屏弹窗告诉玩家的新配方 */
   recipePopup: RecipeId[];
   player: PlayerState;
+  /** 2D：岛上的位置 */
+  walk: Walk;
+  /** 2D：第一天脚本引导进行到第几步；vitalsSeen 为“状态条介绍”已看过 */
+  guide: { step: number; vitalsSeen: boolean };
+  /** 2D：已经出现过“初见介绍”的物体种类 */
+  intros: string[];
+  /** 2D：每座岛上可刷新的采集点 */
+  forage: Record<string, ForageNode[]>;
+  /** 采集点编号 */
+  forageSeq: number;
+  /** 开这一局时加载的 MOD（`id@版本`），以后读档时用来检查 */
+  mods: string[];
+  /** 2D：木筏在海面上的位置（像素）。player.x / y 仍是它所在的格子 */
+  raft: { x: number; y: number };
+  lastFight: FightRecord | null;
   villages: Record<VillageId, VillageState>;
   flags: {
-    herbsLeft: number;
     farm: (number | null)[];
     firstTraining: boolean;
     waterDispute: 'pending' | 'done' | null;
@@ -214,7 +265,8 @@ export type Where = 'pack' | 'hold' | 'stock';
 
 export type Command =
   | { t: 'move'; dx: number; dy: number }
-  | { t: 'dock' }
+  | { t: 'dock'; island?: string }
+  | { t: 'sail'; x: number; y: number }
   | { t: 'leave' }
   | { t: 'drinkSea' }
   | { t: 'fishSea' }
@@ -252,7 +304,9 @@ export type Command =
   | { t: 'toggleTwoStep' }
   | { t: 'dismissTip'; id: string }
   | { t: 'seenRecipes' }
-  | { t: 'ackRecipes' };
+  | { t: 'ackRecipes' }
+  | { t: 'seeIntro'; kind: string }
+  | { t: 'ackGuide'; id: 'vitals' };
 
 export interface Result {
   ok: boolean;

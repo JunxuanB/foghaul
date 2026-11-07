@@ -10,12 +10,13 @@
 | --- | --- |
 | `npm install` | 安装依赖 |
 | `npm run dev` | Vite 开发服务器（默认 http://localhost:5173），带调试面板 |
-| `npm test` | Vitest：地图生成、开局、i18n、自动通关，约 3 秒 |
+| `npm test` | Vitest：地图生成、开局、i18n、自动通关、2D 主岛地图和规则，约 3 秒 |
+| `npm run test:smoke` | 打包后用 Playwright 打开页面：开新游戏、走动、掰树枝、做木筏，并在 `smoke-shots/` 存白天 / 黄昏 / 夜晚截图（需要 Playwright + Chromium） |
 | `npm run typecheck` | `tsc -b`，包含 tests/ |
 | `npm run build` | 类型检查 + 打包到 `dist/` |
 | `npm run deploy` | 打包并用 Wrangler 发布到 Cloudflare |
 
-提交前至少跑 `npm test` 和 `npm run build`。
+提交前至少跑 `npm test` 和 `npm run build`。2D 版的实现方式写在 `docs/2d-tech.md`，改代码时同一个提交里更新它。
 
 ## 测试
 
@@ -26,7 +27,12 @@
 | `tests/i18n.test.ts` | 两个词典键一致、占位符一致；源码里字面量键都存在 |
 | `tests/realistic.test.ts` | **不作弊**的开局试玩：4 个种子，按普通玩家的思路（饿了吃、渴了喝、天黑回家睡）从造木筏玩到救出伐木工并修好第二座灯塔，要求不死、第 4 天前完成。用来检查开局数值 |
 | `tests/playthrough.test.ts` | 用脚本玩家在 4 个种子上从新游戏打到汇报工作，并检查每步对应的目标已完成、全部日志可渲染 |
-| `tests/helpers.ts` | `must`、`sailTo`、`homeGather`、`keepAlive` 等测试工具 |
+| `tests/island2d.test.ts` | 2D 地图：主岛同一种子结果一致、每个互动对象和每个可以长树 / 草药的位置都走得到；**其他每座岛**的码头、槽位（人、灯塔、工作台、储物箱、请求板）都在陆地上、走得到 |
+| `tests/guide2d.test.ts` | 2D 规则：出生点不在树和工作台旁；第一天脚本按顺序推进、已满足的步跳过、晚上插“回小屋睡觉”；每种互动对象都有名字、介绍和提示；背包格子和堆叠；树和草药随机长、采完变树桩、每天早上刷新；v1 存档迁移；海上不能制作 |
+| `tests/guide2d.test.ts`（M2） | 用 `sail` 命令按像素划到石头岛、靠岸、走到工程师身边交付、修灯塔，下一座岛出现；岛上不能跳海捕鱼、站在水边能喝海水 |
+| `tests/mods.test.ts` | MOD 注册表：命名空间、全加或不加、文字双语、新存档记录 MOD |
+| `tests/smoke/smoke.mjs` | 冒烟测试（不在 `npm test` 里，用 `npm run test:smoke`） |
+| `tests/helpers.ts` | `must`、`sailTo`、`homeGather`、`keepAlive` 等测试工具。`must` / `act` 会先用 `approach()` 把人物“瞬移”到命令需要的物体旁边（2D 的位置校验） |
 
 ### 脚本玩家（sim/bot.ts）
 
@@ -41,13 +47,15 @@
 
 ## 调试
 
-- **DEV 面板**（`npm run dev` 或网址加 `?debug`，`` ` `` 键开关）：时间倍率 ×1/×5/×20/×100、回满状态、点亮所有灯塔、显示所有岛、揭开地图、给木筏、加任意物品、传送到已发现的岛、里程碑预设、重置存档。
-- **里程碑预设**（`sim/presets.ts`）：用脚本玩家从同一种子跑到指定步骤，适合直接测中后期界面。
+- **DEV 面板**（`npm run dev` 或网址加 `?debug`，右下角 `dev`）：拖动“look”只改画面的时刻（看昼夜换色，不影响规则），时间倍率 ×1/×10/×60，+4 木头。
+- **里程碑预设**（`sim/presets.ts`）：用脚本玩家从同一种子跑到指定步骤。2D 版的海上和其他岛还没做（M2/M3），所以暂时只在测试里用。
 - **控制台**：
   - `foghaul.state`：当前游戏状态（可直接修改，改完调用 `foghaul.bump()` 刷新界面）；
   - `foghaul.dispatch({ t: 'move', dx: 1, dy: 0 })`：执行命令；
   - `foghaul.speed = 20`：时间倍率；
-  - `foghaulDev.preset('M3 first route')`：跳到预设（仅开发模式）。
+  - `foghaul.state.walk`：人物在岛上的像素位置（`x`、`y` 是脚底中点），改了下一帧生效，可以用来“传送”；
+  - `foghaulView.set({ debugMinute: 23 * 60 })`：只改画面的时刻；`foghaulView.set({ panel: 'craft' })`：打开面板；
+  - `foghaulGame`：Phaser 游戏实例。
 - 模拟层是纯函数加可变状态，大多数问题可以在 Vitest 里用 `createGame(seed)` + `dispatch` 复现，不用开浏览器。
 
 ## 代码约定

@@ -1,15 +1,18 @@
 import { dispatch } from '../src/sim/actions';
+import { approach } from '../src/sim/interact';
 import { findPath } from '../src/sim/map';
 import type { Command, GameState } from '../src/sim/types';
 import { island } from '../src/sim/util';
 import { BALANCE } from '../src/config/balance';
 
 export function act(state: GameState, cmd: Command) {
+  approach(state, cmd);
   const r = dispatch(state, cmd);
   return r;
 }
 
 export function must(state: GameState, cmd: Command) {
+  approach(state, cmd);
   const r = dispatch(state, cmd);
   if (!r.ok) throw new Error(`command ${JSON.stringify(cmd)} failed: ${JSON.stringify(r.msg)}`);
   return r;

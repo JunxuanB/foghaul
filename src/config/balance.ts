@@ -87,19 +87,39 @@ export const BALANCE = {
     branch: { minutes: 20, wood: 1 },
     chop: { minutes: 30, wood: 3 }, // 伐木工获救后
     shoreFish: { minutes: 30, chance: 0.6 },
-    herb: { minutes: 15, total: 5 },
+    herb: { minutes: 15 },
     farm: { plots: 3, plantMinutes: 15, growMinutes: 24 * 60, yield: 6 },
     /** 主岛仓库上限（每种物品） */
     stockCap: 99,
     /** 货舱加固：每次 +10，最多到 60 */
-    holdUpgrade: { woodCosts: [20, 35, 50], step: 10 },
+    holdUpgrade: { woodCosts: [20, 35, 50], step: 6 },
+  },
+
+  // ---------------- 2D：可刷新的采集点（只影响玩家手动采集，岛上的设施生产不受影响） ----------------
+  forage: {
+    /** 树：开局几棵、每天早上新长几棵、最多几棵；每棵能出几根木头（随机，含两端） */
+    tree: { start: 10, perDay: 4, max: 14, yield: [3, 5] as [number, number], sprites: ['tree', 'tree2', 'stree'] },
+    /** 草药丛：每丛能采几份 */
+    herb: { start: 4, perDay: 2, max: 6, yield: [1, 2] as [number, number], sprites: ['herb'] },
+    /** 采集点之间、离固定物体至少隔多远（像素） */
+    spacing: { tree: 28, herb: 16 },
+    /** 候选位置的网格间距（像素） */
+    grid: 12,
+    /** 离出生点、码头、小路至少多远（像素） */
+    keepClear: { spawn: 28, path: 9 },
   },
 
   // ---------------- 背包与货舱 ----------------
+  // 2D 版按格子算：每格放一种东西，按种类有堆叠上限。飞机零件不占格子。
+  // 岛上仓库不按格子：每种物品各有上限（见 stockCap），满了生产会停。
   inventory: {
-    packCap: 16,
-    holdCap: 30,
+    /** 随身背包的格数 */
+    packCap: 12,
+    /** 木筏货舱的格数（加固后增加，见 home.holdUpgrade.step） */
+    holdCap: 24,
     seats: 3,
+    /** 每格的堆叠上限：能吃喝用的东西 / 其他原料 */
+    stack: { consumable: 10, material: 20 },
   },
 
   // ---------------- 行动耗时 ----------------
@@ -212,8 +232,65 @@ export const BALANCE = {
 
   // ---------------- 存档 ----------------
   save: {
-    key: 'foghaul.save.v4',
+    key: 'foghaul2d.save.v1',
     autosaveSeconds: 10,
+  },
+
+  // ---------------- 2D：走路与互动 ----------------
+  interact: {
+    /** 人物脚下离物体互动范围多远以内可以互动（像素） */
+    reach: 16,
+    /** 规则层校验时多给的余量（画面层取前方最近一个，规则层只防作弊） */
+    slack: 8,
+    /** “走出 3 格”：引导第 1 步 */
+    walkTilesForGoal: 3,
+    /** 走路速度（像素/秒）。60 帧时每帧正好 1 像素，画面最顺 */
+    walkSpeed: 60,
+    /** 岛上按 Z 喝海水：离海多近（像素） */
+    waterReach: 12,
+    /** 初见介绍：离物体多近时出现（像素） */
+    introRange: 40,
+  },
+
+  // ---------------- 2D：出海（自由航行） ----------------
+  sail: {
+    /** 海面一格的像素 */
+    tile: 16,
+    /** 木筏：加速度（像素/秒²）、最高速度（像素/秒）、航行每级 +5% */
+    accel: 140,
+    maxSpeed: 50,
+    perSailLevel: 0.05,
+    /** 松手后的阻力：速度每秒乘 e^-drag，约 1 秒停下 */
+    drag: 3,
+    /** 撞岸 / 撞雾反弹的比例 */
+    bounce: 0.2,
+    /** 每航行这么多像素推进一次时间（BALANCE.time.moveMinutes）并检定一次海上事件 */
+    stepPixels: 16,
+    /** 离岛中心几格以内可以靠岸 */
+    dockTiles: 4,
+    /** 离陆地多少像素以内显示“E 靠岸” */
+    dockPixels: 18,
+    /** 出海时木筏放在岛的南边，离岸多远（像素） */
+    launchGap: 14,
+    /** 漂流物：离木筏多近能捞（像素）、离多远就漂走了 */
+    crateGrab: 20,
+    crateRange: 80,
+    /** 撞到浓雾后“雾太浓，过不去”显示多久（秒） */
+    fogWarnSeconds: 1.6,
+  },
+
+  // ---------------- 2D：界面 ----------------
+  ui: {
+    /** 左下角最多显示几条日志 */
+    hudLogLines: 3,
+    /** 快捷栏格数（背包前几格） */
+    hotbarSlots: 5,
+    /** 初见介绍卡显示多久（毫秒） */
+    introMs: 5000,
+    /** 初见介绍卡放在物体上方时，物体顶部离画面上沿至少多少游戏像素（否则放旁边，免得挡住上面的 HUD） */
+    introTopMin: 70,
+    /** 海上战斗卡片显示多久（毫秒） */
+    fightCardMs: 4500,
   },
 };
 

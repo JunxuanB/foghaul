@@ -13,10 +13,10 @@ import {
   carried,
   deliverNeeds,
   giveToPlayer,
-  holdFree,
+  holdRoom,
   missingCost,
   needsDone,
-  packFree,
+  packRoom,
   pay,
   stockRoom,
   whereStock,
@@ -24,6 +24,8 @@ import {
 import { canEnter, lightCircle, lightCorridor, look } from './map';
 import { checkReveals, lightFrom } from './reveal';
 import { updateUnlocks } from './tutorial';
+import { mapHere, nearNode, nearWater, placeAtDock, positionError } from './interact';
+import { launchPoint } from '../world/sea';
 import { fail, OK, say } from './log';
 import { islandM, itemM, m, recipeM, roleM, stockP, type Msg } from './msg';
 import { headcountOf, isHungry, presentPeople, sameJob, teachableJobs } from './people';
@@ -59,6 +61,24 @@ function isResult(x: Result | Island): x is Result {
 
 // ---------------------------------------------------------------- 移动
 
+/** 在海上走了一步（一格或 16 像素）之后：视野、发现岛、航行经验、推进时间、海上事件。返回 false 表示要停下（死了或事件伤到了） */
+function afterStep(state: GameState): boolean {
+  const p = state.player;
+  state.stats.moves++;
+  for (const f of look(state)) say(state, 'log.discovered', { isl: islandM(f.id) }, 'got');
+  gainPlayerXp(state, 'sail', 1);
+  advance(state, BALANCE.time.moveMinutes);
+  if (p.at) return false; // 死亡重生了
+  if (onMove(state) && state.player.hp <= 0) return false;
+  return true;
+}
+
+/** 木筏放到格子中心（文字版的格子移动、读旧档用） */
+function raftToTile(state: GameState): void {
+  const T = BALANCE.sail.tile;
+  state.raft = { x: state.player.x * T + T / 2, y: state.player.y * T + T / 2 };
+}
+
 function move(state: GameState, dx: number, dy: number): Result {
   const p = state.player;
   if (p.at) return fail('err.leaveFirst');
@@ -73,28 +93,73 @@ function move(state: GameState, dx: number, dy: number): Result {
     }
     p.x = nx;
     p.y = ny;
+    raftToTile(state);
     state.pendingCrate = null;
-    state.stats.moves++;
-    for (const f of look(state)) say(state, 'log.discovered', { isl: islandM(f.id) }, 'got');
-    gainPlayerXp(state, 'sail', 1);
-    advance(state, BALANCE.time.moveMinutes);
-    if (p.at) return OK; // 死亡重生了
+    if (!afterStep(state)) break;
     const arrived = islandAt(state, nx, ny);
     if (arrived && arrived.discovered) {
       say(state, 'log.arrived', { isl: islandM(arrived.id) });
       break;
     }
-    if (onMove(state) && state.player.hp <= 0) break;
   }
   return OK;
 }
 
-function dock(state: GameState): Result {
+/**
+ * 2D：自由航行。画面层每航行 stepPixels 像素发一次，带上木筏现在的像素位置。
+ * 校验：在海上、有木筏、新位置离上一格不超过 2 格（防止瞬移）、那一格不在雾里。
+ */
+function sail(state: GameState, x: number, y: number): Result {
+  const p = state.player;
+  if (p.at) return fail('err.leaveFirst');
+  if (!p.hasRaft) return fail('err.noRaft');
+  const T = BALANCE.sail.tile;
+  const tx = Math.floor(x / T);
+  const ty = Math.floor(y / T);
+  if (Math.max(Math.abs(tx - p.x), Math.abs(ty - p.y)) > 2) return fail('err.tooFar');
+  if (!canEnter(state, tx, ty)) return fail(tx < 0 || ty < 0 || tx >= state.width || ty >= state.height ? 'err.mapEdge' : 'err.fog');
+  state.raft = { x, y };
+  p.x = tx;
+  p.y = ty;
+  // 漂远了的漂流物就没了
+  const c = state.pendingCrate;
+  if (c && c.x != null && c.y != null && Math.hypot(c.x - x, c.y - y) > BALANCE.sail.crateRange) state.pendingCrate = null;
+  afterStep(state);
+  // 新漂来的漂流物放在木筏旁边
+  const nc = state.pendingCrate;
+  if (nc && nc.x == null && !p.at) {
+    nc.x = x + (chance(state, 0.5) ? 1 : -1) * BALANCE.sail.crateGrab * 0.8;
+    nc.y = y + 6;
+  }
+  return OK;
+}
+
+/** 能靠岸的岛：已发现、离木筏所在的格子不超过 dockTiles 格；指定了岛就只看那一座 */
+export function dockableIsland(state: GameState, id?: string): Island | undefined {
+  const p = state.player;
+  const lim = BALANCE.sail.dockTiles;
+  let best: Island | undefined;
+  let bd = Infinity;
+  for (const isl of state.islands) {
+    if (!isl.discovered || (id && isl.id !== id)) continue;
+    const d = Math.max(Math.abs(isl.x - p.x), Math.abs(isl.y - p.y));
+    if (d <= lim && d < bd) {
+      bd = d;
+      best = isl;
+    }
+  }
+  return best;
+}
+
+function dock(state: GameState, id?: string): Result {
   const p = state.player;
   if (p.at) return fail('err.alreadyDocked');
-  const isl = islandAt(state, p.x, p.y);
-  if (!isl || !isl.discovered) return fail('err.noIsland');
+  const isl = dockableIsland(state, id);
+  if (!isl) return fail('err.noIsland');
   p.at = isl.id;
+  p.x = isl.x;
+  p.y = isl.y;
+  placeAtDock(state, isl.id);
   state.pendingCrate = null;
   if (!isl.visited) {
     isl.visited = true;
@@ -112,13 +177,24 @@ function leave(state: GameState): Result {
   const p = state.player;
   if (!p.at) return fail('err.atSea');
   if (!p.hasRaft) return fail('err.noRaft');
+  const isl = island(state, p.at);
   p.at = null;
+  // 木筏放在岛的南边（南边不行就换个方向），人在那一格
+  const T = BALANCE.sail.tile;
+  const [x, y] = launchPoint(isl, (lx, ly) => canEnter(state, Math.floor(lx / T), Math.floor(ly / T)));
+  state.raft = { x, y };
+  if (canEnter(state, Math.floor(x / T), Math.floor(y / T))) {
+    p.x = Math.floor(x / T);
+    p.y = Math.floor(y / T);
+  } else raftToTile(state);
   return OK;
 }
 
 // ---------------------------------------------------------------- 海上求生
 
 function drinkSea(state: GameState): Result {
+  // 2D：岛上要站在水边才能喝
+  if (state.player.at && mapHere(state) && !nearWater(state)) return fail('err.needWater');
   const d = BALANCE.survival.seaDrink;
   const p = state.player;
   p.water = Math.min(BALANCE.survival.maxWater, p.water + d.water);
@@ -129,6 +205,7 @@ function drinkSea(state: GameState): Result {
 }
 
 function fishSea(state: GameState): Result {
+  if (state.player.at) return fail('err.atSeaOnly');
   const f = BALANCE.survival.seaFish;
   if (chance(state, f.successChance)) {
     const left = giveToPlayer(state, 'fish', 1);
@@ -151,12 +228,18 @@ function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'
   const lumber = state.people.find((x) => x.role === 'lumberjack')?.active;
   // 采集到的东西默认放进背包，满了放货舱，再满了放主岛仓库
   const give = (item: ItemId, n: number) => n - giveToPlayer(state, item, n, 'pack');
+  // 2D：采的是人物身边那一棵树 / 那一丛草药，采几次就采完（没有地图的岛不会走到这里）
+  const node = mapHere(state) ? nearNode(state, what === 'herb' ? 'herb' : 'tree') : null;
+  if (mapHere(state) && (what === 'branch' || what === 'chop' || what === 'herb') && !node) return fail(what === 'herb' ? 'err.noHerbs' : 'err.noTree');
   if (what === 'branch' || what === 'chop') {
     const chop = what === 'chop';
     if (chop && !lumber) return fail('err.needLumberjack');
     const g = chop ? H.chop : H.branch;
-    const k = give('wood', g.wood);
+    const want = node ? Math.min(g.wood, node.left) : g.wood;
+    const k = give('wood', want);
+    if (node) node.left -= k;
     say(state, k ? (chop ? 'log.chop' : 'log.branch') : 'log.stockFull', { n: k, item: itemM('wood') });
+    if (node && node.left <= 0) say(state, 'log.treeDown');
     advance(state, g.minutes);
   } else if (what === 'shoreFish') {
     if (chance(state, H.shoreFish.chance)) {
@@ -165,10 +248,10 @@ function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'
     } else say(state, 'log.shoreFishMiss');
     advance(state, H.shoreFish.minutes);
   } else {
-    if (state.flags.herbsLeft <= 0) return fail('err.noHerbs');
     const k = give('herb', 1);
-    if (k) state.flags.herbsLeft--;
-    say(state, 'log.herb', { left: state.flags.herbsLeft });
+    if (node) node.left -= k;
+    say(state, k ? 'log.herbPick' : 'log.stockFull', { item: itemM('herb') });
+    if (node && node.left <= 0) say(state, 'log.herbDone');
     advance(state, H.herb.minutes);
   }
   return OK;
@@ -214,10 +297,14 @@ export function craftBlock(state: GameState, recipe: RecipeId): Msg | null {
   if (bulk && !src) return m('err.needOwnedIsland');
   if (!canPay(state, src, r.inputs as Stock)) return m('err.missing', { list: stockP(missingCost(state, src, r.inputs as Stock)) });
   if (bulk && src && Object.entries(r.outputs).some(([k, v]) => stockRoom(state, src, k as ItemId) < (v ?? 0))) return m('err.stockFull');
-  const carry = Object.entries(r.outputs).reduce((n, [k, v]) => n + (ITEMS[k as ItemId].portable ? v ?? 0 : 0), 0);
+  // 做好的东西放背包，满了放货舱，再满了放这座岛的仓库；用掉的原料会腾出地方（按件数粗算）
   const freed = Object.values(r.inputs).reduce((n, v) => n + (v ?? 0), 0);
-  const room = packFree(state) + holdFree(state) + freed + (src ? 99 : 0);
-  if (carry > room) return m('err.noRoom');
+  for (const [k, v] of Object.entries(r.outputs)) {
+    const id = k as ItemId;
+    if (!ITEMS[id].portable) continue;
+    const room = packRoom(state, id) + holdRoom(state, id) + (src ? stockRoom(state, src, id) : 0) + freed;
+    if ((v ?? 0) > room) return m('err.noRoom');
+  }
   return null;
 }
 
@@ -287,8 +374,8 @@ function transfer(state: GameState, item: ItemId, from: 'pack' | 'hold' | 'stock
   const dst = whereStock(state, to);
   if (!src || !dst) return fail('err.notDocked');
   let k = Math.min(n, stockGet(src, item));
-  if (to === 'pack' && !def.key) k = Math.min(k, packFree(state));
-  if (to === 'hold' && !def.key) k = Math.min(k, holdFree(state));
+  if (to === 'pack') k = Math.min(k, packRoom(state, item));
+  if (to === 'hold') k = Math.min(k, holdRoom(state, item));
   if (to === 'stock' && isl) k = Math.min(k, stockRoom(state, isl, item));
   if (k <= 0) return fail(stockGet(src, item) <= 0 ? 'err.noneLeft' : 'err.noRoom');
   stockAdd(src, item, -k);
@@ -685,6 +772,8 @@ function fly(state: GameState, to: string): Result {
 
 export function dispatch(state: GameState, cmd: Command): Result {
   if (state.cutscene && cmd.t !== 'endCutscene') return fail('err.cutscene');
+  const pos = positionError(state, cmd);
+  if (pos) return fail(pos.k, pos.p);
   const r = run(state, cmd);
   if (!r.ok && r.msg) say(state, r.msg, 'warn');
   checkReveals(state);
@@ -697,7 +786,9 @@ function run(state: GameState, cmd: Command): Result {
     case 'move':
       return move(state, cmd.dx, cmd.dy);
     case 'dock':
-      return dock(state);
+      return dock(state, cmd.island);
+    case 'sail':
+      return sail(state, cmd.x, cmd.y);
     case 'leave':
       return leave(state);
     case 'drinkSea':
@@ -706,6 +797,10 @@ function run(state: GameState, cmd: Command): Result {
       return fishSea(state);
     case 'takeCrate':
       if (!state.pendingCrate) return fail('err.noCrate');
+      {
+        const c = state.pendingCrate;
+        if (c.x != null && c.y != null && Math.hypot(c.x - state.raft.x, c.y - state.raft.y) > BALANCE.sail.crateGrab) return fail('err.crateFar');
+      }
       takeCrate(state);
       return OK;
     case 'gather':
@@ -791,6 +886,12 @@ function run(state: GameState, cmd: Command): Result {
       return OK;
     case 'dismissTip':
       if (!state.tips.includes(cmd.id)) state.tips.push(cmd.id);
+      return OK;
+    case 'seeIntro':
+      if (!state.intros.includes(cmd.kind)) state.intros.push(cmd.kind);
+      return OK;
+    case 'ackGuide':
+      state.guide.vitalsSeen = true;
       return OK;
   }
 }
