@@ -70,6 +70,9 @@ export class IslandScene extends Phaser.Scene {
   private pending: { cmd: Command; obj: WorldObj } | null = null;
   private off: (() => void) | null = null;
   private lastPos = { x: 0, y: 0 };
+  /** 点阵过渡：到 1 时执行 mid，再淡回 0 */
+  private fade: { t: number; mid: (() => void) | null } | null = null;
+  private deaths = 0;
 
   constructor() {
     super('island');
@@ -125,6 +128,7 @@ export class IslandScene extends Phaser.Scene {
     this.off = onAction((a) => this.onAction(a));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off?.());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.off?.());
+    this.deaths = s.stats.deaths;
     this.placeCamera();
   }
 
@@ -186,10 +190,30 @@ export class IslandScene extends Phaser.Scene {
       case 'wreck':
         return v.set({ panel: 'wreck' });
       case 'bed':
-        this.ctx.store.dispatch({ t: 'sleep' });
-        this.ctx.store.save();
+        this.fadeThrough(() => {
+          this.ctx.store.dispatch({ t: 'sleep' });
+          this.ctx.store.save();
+        });
         return;
     }
+  }
+
+  private fadeThrough(mid: () => void): void {
+    if (this.fade) return;
+    this.fade = { t: 0, mid };
+  }
+
+  private stepFade(dt: number): void {
+    const f = this.fade;
+    if (!f) return;
+    f.t += dt / ANIM.fadeSeconds;
+    if (f.t >= 1 && f.mid) {
+      const mid = f.mid;
+      f.mid = null;
+      mid();
+    }
+    if (f.t >= 2) this.fade = null;
+    if (this.pipe) this.pipe.fade = this.fade ? (f.t < 1 ? f.t : 2 - f.t) : 0;
   }
 
   private cancelAction(): void {
@@ -222,6 +246,13 @@ export class IslandScene extends Phaser.Scene {
     store.hold('panel', !!view.s.panel && PAUSING_PANELS.includes(view.s.panel));
     store.frame(delta);
     const s = this.state;
+    this.stepFade(dt);
+    // 死亡：在床边醒来，用点阵过渡
+    if (s.stats.deaths !== this.deaths) {
+      this.fadeThrough(() => undefined);
+      this.deaths = s.stats.deaths;
+      this.cancelAction();
+    }
 
     if (this.pending && performance.now() >= (view.s.action?.end ?? 0)) this.finishAction();
     this.walk(dt);
@@ -249,7 +280,7 @@ export class IslandScene extends Phaser.Scene {
   private walk(dt: number): void {
     const s = this.state;
     const w = s.walk;
-    const blocked = !!this.ctx.view.s.panel || !!this.pending || !this.ctx.store.running;
+    const blocked = !!this.ctx.view.s.panel || !!this.pending || !!this.fade || !this.ctx.store.running;
     let [dx, dy] = blocked ? [0, 0] : moveDir();
     this.moving = dx !== 0 || dy !== 0;
     if (!this.moving) return;

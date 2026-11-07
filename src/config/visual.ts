@@ -73,6 +73,8 @@ export const ANIM = {
   actionSeconds: { branch: 1.0, chop: 1.2, shoreFish: 1.2, herb: 0.8, craft: 0.9 } as Record<string, number>,
   /** 头顶“+1”飘起的时长（秒） */
   popSeconds: 1.1,
+  /** 点阵过渡的时长（秒）：睡觉、复活 */
+  fadeSeconds: 0.4,
   /** 世界和画面的重画间隔（秒）：浪花、雾、灯光遮罩 */
   fxInterval: 1 / 30,
 };

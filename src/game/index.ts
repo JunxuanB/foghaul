@@ -7,10 +7,10 @@ import { IslandScene } from './scenes/IslandScene';
 import { CTX_KEY, type GameCtx } from './context';
 import { installKeys } from './input/keys';
 
-/** 窗口能放下的最大整数倍；不到 1 倍时按比例缩小 */
+/** 窗口能放下的最大整数倍；放不下 2 倍的小屏幕（手机）按比例铺满，保证字看得清 */
 export function fitZoom(w: number, h: number): number {
   const k = Math.min(w / VIEW.w, h / VIEW.h);
-  return k >= 1 ? Math.floor(k) : k;
+  return k >= 2 ? Math.floor(k) : k;
 }
 
 export function startGame(parent: HTMLElement, frame: HTMLElement, ctx: GameCtx): Phaser.Game {

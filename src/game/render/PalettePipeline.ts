@@ -15,6 +15,7 @@ uniform float uTB[12];
 uniform float uBayer[16];
 uniform float uLevel;
 uniform float uUseMask;
+uniform float uFade;
 varying vec2 outTexCoord;
 
 vec3 palAt(float k) {
@@ -44,6 +45,8 @@ void main() {
     float lit = texture2D(uMask, vec2(outTexCoord.x, 1.0 - outTexCoord.y)).a;
     if (lit > 0.5) outIdx = idx;
   }
+  // 点阵过渡（睡觉、死亡、切场景）：Bayer 阈值以下的像素变成深渊色
+  if (b < uFade * 16.0) outIdx = 0.0;
   gl_FragColor = vec4(palAt(outIdx), 1.0);
 }
 `;
@@ -52,6 +55,8 @@ export class PalettePipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipel
   mix: PhaseMix = { a: 'day', b: 'day', m: 0, s: 0 };
   mask: Phaser.Textures.CanvasTexture | null = null;
   useMask = false;
+  /** 点阵过渡 0–1 */
+  fade = 0;
   private pal: number[] = [];
   private bayer: number[] = BAYER.map((v) => v);
 
@@ -70,6 +75,7 @@ export class PalettePipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipel
     this.set1fv('uBayer', this.bayer);
     this.set1f('uLevel', Math.round(this.mix.m * 16));
     this.set1f('uUseMask', this.useMask && this.mask ? 1 : 0);
+    this.set1f('uFade', this.fade);
     this.set1i('uMask', 1);
   }
 

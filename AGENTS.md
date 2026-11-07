@@ -8,6 +8,34 @@
 
 - 文字版冻结在 `text-version` 分支：只修 bug，不加功能。
 - 下面的内容描述的是文字版。2D 版继续遵守其中的通用规则（`Msg` 和词典、数值只写在 `src/config/`、随机只用 `sim/rng.ts`、状态可序列化、改动后跑测试和构建），其余以 `docs/2d-design.md` 为准。
+- 进度：M0、M1 已完成（主岛能走、能采集、能做木筏，第一天引导 1–6 步）。下一步是 M2（出海）。实现时的取舍见 `docs/2d-design.md` 的“M1 实现记录”。
+
+### 2D 版代码地图
+
+| 想改 | 去哪里 |
+| --- | --- |
+| 调色板、昼夜换色表、灯光半径、雾、动画节奏 | `src/config/visual.ts` |
+| 岛屿地图模板（尺寸、地形、建筑槽位、小路、码头） | `src/config/maps.ts` |
+| 物体的碰撞底座、互动范围、种类 | `src/config/buildings.ts` |
+| 走路速度、互动距离 | `src/config/balance.ts` 的 `interact` |
+| 程序生成的精灵、物品图标 | `src/art/sprites.ts`、`src/art/icons.ts`（`draw.ts` 负责画到 canvas） |
+| 地图生成（纯 TS，规则层和画面层共用） | `src/world/island.ts` |
+| 按 E 做什么、按键提示、位置校验 | `src/sim/interact.ts` |
+| 第一天脚本引导 | `src/sim/guide.ts`；HUD 元素逐步出现：`src/sim/tutorial.ts` 的 `FEATURES` |
+| 岛上场景（走动、碰撞、选中、动作、引导箭头、特效） | `src/game/scenes/IslandScene.ts` |
+| 换色着色器、灯光遮罩、雾 | `src/game/render/` |
+| 键盘 | `src/game/input/keys.ts` |
+| 界面临时状态（面板、提示、动作、快捷栏） | `src/store/view.ts` |
+| HUD 四角、世界里的字 | `src/ui/hud/` |
+| 面板（背包、制作、仓库、灯塔、残骸、日志、帮助、菜单） | `src/ui/panels/Panels.tsx` |
+
+2D 版的额外规则：
+
+- 画面和界面只用 12 色（`global.css` 的 `--c0`–`--c11`；画面里随时段变色的字用 `--w*`）。只有一套深色界面，文字版的浅色主题和第 8 条里的色块类不再使用。
+- 精灵按白天调色板画，昼夜交给换色着色器；不要画半透明，渐变一律用 Bayer 点阵。
+- 岛上的东西必须走到旁边才能用：新命令如果需要某个物体，在 `interact.ts` 的 `objectFor()` 里登记，测试里用 `approach()`。
+- 存档：`SAVE_VERSION = 1`，键 `foghaul2d.save.v1`，不读文字版存档。
+- 改了画面要跑 `npm run test:smoke`（Playwright 截白天 / 黄昏 / 夜晚三张图）。
 
 ## 项目是什么
 
@@ -27,6 +55,7 @@
 ```bash
 npm run dev        # 开发服务器 + 调试面板
 npm test           # 全部测试（含自动通关）
+npm run test:smoke # 2D 冒烟测试：Playwright 打开页面玩一段并截图
 npm run build      # 类型检查 + 打包
 npm run deploy     # 打包并发布到 Cloudflare（需要 wrangler 已登录）
 ```
