@@ -226,5 +226,7 @@ button.u-slot:hover { border-color: var(--c5); }
 .u-slot .hk { position: absolute; left: calc(var(--k) * 1px); top: 0; font-style: normal; font-size: calc(var(--k) * 4.5px); line-height: 1.2;
   color: var(--c5); text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--c0); }
 .u-slot.sel .hk { color: var(--c11); }
-.hud-bc .q { align-self: center; display: flex; align-items: center; gap: calc(var(--k) * 1px); font-size: calc(var(--k) * 4.5px); color: var(--w6);
-  text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--w0); margin-left: calc(var(--k) * 2px); }
+/* 右下角：快捷栏选中的物品 */
+.hud-br { position: absolute; right: calc(var(--k) * 6px); bottom: calc(var(--k) * 5px); }
+.sel-card { display: flex; align-items: center; gap: calc(var(--k) * 4px); font-size: calc(var(--k) * 5px); padding: calc(var(--k) * 2px) calc(var(--k) * 4px); }
+.sel-card .keyhint { display: flex; align-items: center; gap: calc(var(--k) * 1.5px); color: var(--c6); }

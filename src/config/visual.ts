@@ -64,7 +64,8 @@ export const FOG = { driftX: 2, driftY: 0.6, layer2: 0.6, gain: 1.35, noise: 0.8
 
 /** 动画节奏 */
 export const ANIM = {
-  walkFps: 8,
+  /** 行走动画：每走多少像素换一帧（60 像素/秒时约 7.5 帧/秒） */
+  walkStride: 8,
   /** 浪花往岸上推的速度（弧度/秒）；sparkle 为浪尖闪烁的速度 */
   surfPhase: 1.6,
   surfSparkle: 0.8,

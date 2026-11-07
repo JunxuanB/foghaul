@@ -144,7 +144,11 @@ export class IslandScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off?.());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.off?.());
     this.deaths = s.stats.deaths;
+    this.lastX = s.walk.x;
+    this.lastY = s.walk.y;
     this.placeCamera();
+    // 所有纹理都按最近邻采样（像素画放大、移动时不糊）
+    for (const key of this.textures.getTextureKeys()) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 
   /**
@@ -361,11 +365,14 @@ export class IslandScene extends Phaser.Scene {
       this.fxAcc = 0;
       this.drawFx(ph.s);
     }
-    view.s.anchors.player = { x: s.walk.x - this.camX, y: s.walk.y - this.camY };
+    view.s.anchors.player = { x: this.snap(s.walk.x, this.camX) - this.camX, y: this.snap(s.walk.y, this.camY) - this.camY };
     // 灯光遮罩按屏幕对齐，每帧重画（只在天暗时）
     this.paintLights(ph.s);
   }
 
+  /** 上一帧人物的位置（行走帧按距离换） */
+  private lastX = 0;
+  private lastY = 0;
   /** 镜头左上角在世界里的位置（游戏像素，可以是小数） */
   private camX = 0;
   private camY = 0;
@@ -411,12 +418,16 @@ export class IslandScene extends Phaser.Scene {
     cam.centerOn(this.camX + VIEW.w / 2, this.camY + VIEW.h / 2);
   }
 
-  private updatePlayerSprite(dt: number): void {
+  /**
+   * 人物精灵：行走帧按走过的距离换（每 ANIM.walkStride 像素一帧），帧率掉了也不会像在跑；
+   * 绘制位置对齐到屏幕像素（1/k 游戏像素），停在半个像素上会糊、会闪。
+   */
+  private updatePlayerSprite(_dt: number): void {
     const w = this.state.walk;
     let f = 0;
     if (this.moving) {
-      this.walkT += dt;
-      f = Math.floor(this.walkT * ANIM.walkFps) % 4;
+      this.walkT += Math.hypot(w.x - this.lastX, w.y - this.lastY);
+      f = Math.floor(this.walkT / ANIM.walkStride) % 4;
     } else if (this.pending) {
       // 采集：跟着节奏挥一下手（捞鱼时站着不动，只看浮漂）
       const swing = (this.actT % ANIM.gatherBeat) / ANIM.gatherBeat < 0.3;
@@ -424,8 +435,16 @@ export class IslandScene extends Phaser.Scene {
     } else this.walkT = 0;
     this.player.setTexture(`ch_player_${DIR_OF[w.facing]}_${f}`);
     this.player.setFlipX(w.facing === 'left');
-    this.player.setPosition(w.x, w.y + 1);
+    this.player.setPosition(this.snap(w.x, this.camX), this.snap(w.y, this.camY) + 1);
     this.player.setDepth(w.y);
+    this.lastX = w.x;
+    this.lastY = w.y;
+  }
+
+  /** 世界坐标对齐到屏幕像素：镜头左上角 + 整数个屏幕像素 */
+  private snap(v: number, cam: number): number {
+    const k = this.ctx.view.s.k;
+    return cam + Math.round((v - cam) * k) / k;
   }
 
   /** 选出人物前方 reach 以内最近的一个可互动物体，更新按键提示 */

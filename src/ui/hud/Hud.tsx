@@ -12,7 +12,7 @@ import { objectives } from '../../sim/objectives';
 import { activeTip, has } from '../../sim/tutorial';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
 import { Rich } from '../components/Text';
-import { Slot } from '../components/Item';
+import { ItemName, Slot } from '../components/Item';
 
 /** 第一次出现时闪两下 */
 function useFlash(on: boolean): string {
@@ -155,24 +155,38 @@ function Hotbar() {
   const f = useFlash(show);
   if (!show) return null;
   const slots = slotView(g.player.pack).slots;
-  const cur = slots[v.hotbar];
-  const edible = !!cur && !!ITEMS[cur.id].eat;
   return (
     <div className={'hud-bc' + f}>
       {Array.from({ length: BALANCE.ui.hotbarSlots }, (_, i) => (
         <Slot key={i} hotkey={String(i + 1)} id={slots[i]?.id} n={slots[i]?.n} sel={v.hotbar === i} onClick={() => vs.set({ hotbar: i })} />
       ))}
-      {edible && (
-        <span className="q">
-          <span className="u-key">Q</span>
-          {t(ITEMS[cur.id].verb === 'drink' ? 'ui.drinkIt' : ITEMS[cur.id].verb === 'use' ? 'ui.useIt' : 'ui.eatIt')}
-        </span>
-      )}
     </div>
   );
 }
 
-/** 画面里的字跟着时段换色 */
+/** 右下角：快捷栏选中的物品（名字、数量、能用时的按键）。固定在角上，快捷栏本身不会被挤动 */
+function Selected() {
+  const g = useGame();
+  const v = useView();
+  if (!has(g, 'hotbar')) return null;
+  const cur = slotView(g.player.pack).slots[v.hotbar];
+  if (!cur) return null;
+  const def = ITEMS[cur.id];
+  return (
+    <div className="hud-br">
+      <div className="u-panel sel-card">
+        <ItemName id={cur.id} n={cur.n} />
+        {def.eat && (
+          <span className="keyhint">
+            <span className="u-key">Q</span>
+            {t(def.verb === 'drink' ? 'ui.drinkIt' : def.verb === 'use' ? 'ui.useIt' : 'ui.eatIt')}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function usePhaseColors(ref: React.RefObject<HTMLDivElement>) {
   const g = useGame();
   const v = useView();
@@ -198,6 +212,7 @@ export function Hud() {
         <LogLines />
       </div>
       <Hotbar />
+      <Selected />
     </div>
   );
 }

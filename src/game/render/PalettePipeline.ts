@@ -67,7 +67,8 @@ export class PalettePipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipel
   private bayer: number[] = BAYER.map((v) => v);
 
   constructor(game: Phaser.Game) {
-    super({ game, name: 'palette', fragShader: frag });
+    // 渲染目标用最近邻采样（默认是线性，像素画移动时可能发糊）
+    super({ game, name: 'palette', fragShader: frag, renderTarget: [{ scale: 1, minFilter: 1 }] } as Phaser.Types.Renderer.WebGL.WebGLPipelineConfig);
     for (const h of BR) {
       const [r, g, b] = rgb(h);
       this.pal.push(r / 255, g / 255, b / 255);
