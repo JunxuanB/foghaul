@@ -27,6 +27,9 @@ import { fencePieces } from '../world/fence';
 
 type Img = Phaser.GameObjects.Image;
 
+/** 特效画布比画面每边大出的像素：两次重画之间镜头移动时边上不露空 */
+const FX_PAD = 16;
+
 const DIR_OF: Record<Facing, 'down' | 'up' | 'side'> = { down: 'down', up: 'up', left: 'side', right: 'side' };
 const FACE_VEC: Record<Facing, [number, number]> = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
 
@@ -63,9 +66,9 @@ export class IslandScene extends Phaser.Scene {
   private hl!: Img;
   private arrow!: Img;
   private raft: Img | null = null;
-  private under!: Phaser.Textures.CanvasTexture;
-  private over!: Phaser.Textures.CanvasTexture;
-  private fog!: Phaser.Textures.CanvasTexture;
+  private under!: { tex: Phaser.Textures.CanvasTexture; img: Img };
+  private over!: { tex: Phaser.Textures.CanvasTexture; img: Img };
+  private fog!: { tex: Phaser.Textures.CanvasTexture; img: Img };
   private mask!: Phaser.Textures.CanvasTexture;
   private fogImg!: ImageData;
   private maskImg!: ImageData;
@@ -112,12 +115,12 @@ export class IslandScene extends Phaser.Scene {
     this.surf = fx.surf;
     this.glints = fx.glints;
 
-    this.under = this.screenCanvas('fx_under', -500);
-    this.over = this.screenCanvas('fx_over', 50000);
-    this.fog = this.screenCanvas('fx_fog', 60000);
-    this.mask = this.textures.exists('fx_mask') ? (this.textures.get('fx_mask') as Phaser.Textures.CanvasTexture) : this.textures.createCanvas('fx_mask', VIEW.w, VIEW.h)!;
-    this.fogImg = this.fog.context.createImageData(VIEW.w, VIEW.h);
-    this.maskImg = this.mask.context.createImageData(VIEW.w, VIEW.h);
+    this.under = this.fxCanvas('fx_under', -500);
+    this.over = this.fxCanvas('fx_over', 50000);
+    this.fog = this.fxCanvas('fx_fog', 60000);
+    this.mask = this.textures.exists('fx_mask') ? (this.textures.get('fx_mask') as Phaser.Textures.CanvasTexture) : this.textures.createCanvas('fx_mask', VIEW.w + 1, VIEW.h + 1)!;
+    this.fogImg = this.fog.tex.context.createImageData(this.fog.tex.width, this.fog.tex.height);
+    this.maskImg = this.mask.context.createImageData(VIEW.w + 1, VIEW.h + 1);
 
     this.syncObjects();
     this.makeOverlays();
@@ -131,7 +134,6 @@ export class IslandScene extends Phaser.Scene {
     this.player = this.add.image(s.walk.x, s.walk.y + 1, 'ch_player_down_0').setOrigin(0.5, 1);
 
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, this.L.pw, this.L.ph);
     cam.setRoundPixels(true);
     cam.setPostPipeline(PalettePipeline);
     const p = cam.getPostPipeline(PalettePipeline);
@@ -145,10 +147,15 @@ export class IslandScene extends Phaser.Scene {
     this.placeCamera();
   }
 
-  private screenCanvas(key: string, depth: number): Phaser.Textures.CanvasTexture {
-    const tex = this.textures.exists(key) ? (this.textures.get(key) as Phaser.Textures.CanvasTexture) : this.textures.createCanvas(key, VIEW.w, VIEW.h)!;
-    this.add.image(0, 0, key).setOrigin(0, 0).setScrollFactor(0).setDepth(depth);
-    return tex;
+  /**
+   * 特效层（浪花、雾、炊烟……）：比画面大一圈的画布，按世界坐标摆放。
+   * 每 1/30 秒重画一次，重画之间它跟着世界一起动，不会贴在屏幕上“游”。
+   */
+  private fxCanvas(key: string, depth: number): { tex: Phaser.Textures.CanvasTexture; img: Img } {
+    const P = FX_PAD;
+    const tex = this.textures.exists(key) ? (this.textures.get(key) as Phaser.Textures.CanvasTexture) : this.textures.createCanvas(key, VIEW.w + P * 2, VIEW.h + P * 2)!;
+    const img = this.add.image(0, 0, key).setOrigin(0, 0).setDepth(depth);
+    return { tex, img };
   }
 
   // ---------------------------------------------------------------- 输入
@@ -354,59 +361,54 @@ export class IslandScene extends Phaser.Scene {
       this.fxAcc = 0;
       this.drawFx(ph.s);
     }
-    const cam = this.cameras.main;
-    view.s.anchors.player = { x: s.walk.x - cam.scrollX, y: s.walk.y - cam.scrollY };
+    view.s.anchors.player = { x: s.walk.x - this.camX, y: s.walk.y - this.camY };
+    // 灯光遮罩按屏幕对齐，每帧重画（只在天暗时）
+    this.paintLights(ph.s);
   }
 
-  /** 走路剩下不到一步的距离（像素） */
-  private stepAcc = 0;
+  /** 镜头左上角在世界里的位置（游戏像素，可以是小数） */
+  private camX = 0;
+  private camY = 0;
 
   /**
-   * 按整像素走，每帧走整数步：60 帧的屏幕上每帧正好 1 像素，画面不会一顿一顿的。
-   * 斜着走时两个方向每帧各走 1 像素（和星露谷一样，斜走略快），用左右的行走动画。
+   * 走路：连续坐标，任何方向都是同样的速度（斜着走不会更快）。
+   * 画面按屏幕分辨率渲染（镜头放大 k 倍），所以不到一像素的移动也看得见，斜着走不会一顿一顿。
+   * 斜着走用左右的行走动画。
    */
   private walk(dt: number): void {
     const s = this.state;
     const w = s.walk;
-    w.x = Math.round(w.x);
-    w.y = Math.round(w.y);
     const blocked = !!this.ctx.view.s.panel || !!this.pending || !!this.fade || !this.ctx.store.running;
-    const [mx, my] = blocked ? [0, 0] : moveDir();
-    const sx = Math.sign(mx);
-    const sy = Math.sign(my);
-    this.moving = sx !== 0 || sy !== 0;
-    if (!this.moving) {
-      this.stepAcc = 0;
-      return;
-    }
-    if (sx !== 0) w.facing = sx > 0 ? 'right' : 'left';
-    else w.facing = sy > 0 ? 'down' : 'up';
-    // 帧间隔在 60 帧附近抖动时按标准帧算，保证每帧步数一样
-    const frame = Math.abs(dt - 1 / 60) < 0.006 ? 1 / 60 : dt;
-    this.stepAcc += BALANCE.interact.walkSpeed * frame;
-    let moved = 0;
-    while (this.stepAcc >= 1) {
-      const okX = sx !== 0 && this.canWalk(w.x + sx, w.y);
-      if (okX) w.x += sx;
-      const okY = sy !== 0 && this.canWalk(w.x, w.y + sy);
-      if (okY) w.y += sy;
-      if (!okX && !okY) {
-        this.stepAcc = 0;
-        break;
-      }
-      this.stepAcc -= 1;
-      moved += okX && okY ? Math.SQRT2 : 1;
-    }
+    let [dx, dy] = blocked ? [0, 0] : moveDir();
+    this.moving = dx !== 0 || dy !== 0;
+    if (!this.moving) return;
+    if (dx !== 0) w.facing = dx > 0 ? 'right' : 'left';
+    else w.facing = dy > 0 ? 'down' : 'up';
+    const len = Math.hypot(dx, dy);
+    dx /= len;
+    dy /= len;
+    const sp = BALANCE.interact.walkSpeed * dt;
+    const x0 = w.x;
+    const y0 = w.y;
+    if (dx !== 0 && this.canWalk(w.x + dx * sp, w.y)) w.x += dx * sp;
+    if (dy !== 0 && this.canWalk(w.x, w.y + dy * sp)) w.y += dy * sp;
+    const moved = Math.hypot(w.x - x0, w.y - y0);
     w.moved += moved;
-    if (moved === 0 && this.stepAcc === 0) this.moving = false;
+    if (moved === 0) this.moving = false;
   }
 
+  /** 镜头跟着人物，在地图边缘停住；位置对齐到屏幕像素（1/k 游戏像素） */
   private placeCamera(): void {
     const w = this.state.walk;
     const cam = this.cameras.main;
-    const x = Math.round(Math.max(0, Math.min(this.L.pw - VIEW.w, w.x - VIEW.w / 2)));
-    const y = Math.round(Math.max(0, Math.min(this.L.ph - VIEW.h, w.y - 16 - VIEW.h / 2)));
-    cam.setScroll(x, y);
+    const k = this.ctx.view.s.k;
+    if (cam.zoom !== k) cam.setZoom(k);
+    if (this.pipe) this.pipe.scale = k;
+    const x = Math.max(0, Math.min(this.L.pw - VIEW.w, w.x - VIEW.w / 2));
+    const y = Math.max(0, Math.min(this.L.ph - VIEW.h, w.y - 16 - VIEW.h / 2));
+    this.camX = Math.round(x * k) / k;
+    this.camY = Math.round(y * k) / k;
+    cam.centerOn(this.camX + VIEW.w / 2, this.camY + VIEW.h / 2);
   }
 
   private updatePlayerSprite(dt: number): void {
@@ -422,7 +424,7 @@ export class IslandScene extends Phaser.Scene {
     } else this.walkT = 0;
     this.player.setTexture(`ch_player_${DIR_OF[w.facing]}_${f}`);
     this.player.setFlipX(w.facing === 'left');
-    this.player.setPosition(Math.round(w.x), Math.round(w.y) + 1);
+    this.player.setPosition(w.x, w.y + 1);
     this.player.setDepth(w.y);
   }
 
@@ -469,7 +471,6 @@ export class IslandScene extends Phaser.Scene {
     const s = this.state;
     const v = this.ctx.view;
     const now = performance.now();
-    const cam = this.cameras.main;
     const cur = v.s.intro;
     if (cur && now > cur.until) v.set({ intro: null });
     if (v.s.intro) {
@@ -480,10 +481,10 @@ export class IslandScene extends Phaser.Scene {
         const below = o.y > s.walk.y + 4;
         const top = img ? img.y - img.height : o.y - 16;
         const half = img ? img.width / 2 : 8;
-        const side = o.x - cam.scrollX < VIEW.w / 2 ? 1 : -1;
+        const side = o.x - this.camX < VIEW.w / 2 ? 1 : -1;
         v.s.anchors.intro = below
-          ? { x: o.x + side * (half + 6) - cam.scrollX, y: top - cam.scrollY, below, side }
-          : { x: o.x - cam.scrollX, y: top - cam.scrollY, below, side };
+          ? { x: o.x + side * (half + 6) - this.camX, y: top - this.camY, below, side }
+          : { x: o.x - this.camX, y: top - this.camY, below, side };
       }
       return;
     }
@@ -518,7 +519,6 @@ export class IslandScene extends Phaser.Scene {
     const s = this.state;
     const v = this.ctx.view;
     const step = currentGuide(s);
-    const cam = this.cameras.main;
     let tx: number | null = null;
     let ty = 0;
     let uiTarget: string | null = null;
@@ -545,8 +545,8 @@ export class IslandScene extends Phaser.Scene {
       return;
     }
     const bob = Math.round(Math.sin(this.t * 5) * 1.5);
-    const sx = tx - cam.scrollX;
-    const sy = ty - cam.scrollY;
+    const sx = tx - this.camX;
+    const sy = ty - this.camY;
     const inView = sx > 8 && sx < VIEW.w - 8 && sy > 10 && sy < VIEW.h - 4;
     this.arrow.setVisible(inView).setPosition(Math.round(tx), Math.round(ty) + bob);
     if (inView) v.s.anchors.edge = null;
@@ -653,19 +653,26 @@ export class IslandScene extends Phaser.Scene {
     return !this.blockers.some((b) => fx < b.x + b.w && fx + FEET.w > b.x && fy < b.y + b.h && fy + FEET.h > b.y);
   }
 
-  // ---------------------------------------------------------------- 画面特效（屏幕坐标）
+  // ---------------------------------------------------------------- 画面特效
 
+  /** 灯光的位置（世界坐标，已乘灯光强度），每 1/30 秒随特效一起更新 */
+  private spots: Spot[] = [];
+  private beams: Beam[] = [];
+
+  /**
+   * 特效层按世界坐标画：画布左上角 = 镜头左上角往外 FX_PAD 像素，画完把图片摆到那个位置。
+   * 两次重画之间，特效跟着世界一起动（浪花、雾不会贴在屏幕上来回“游”）。
+   */
   private drawFx(strength: number): void {
-    const cam = this.cameras.main;
-    const cx = Math.round(cam.scrollX);
-    const cy = Math.round(cam.scrollY);
+    const cx = Math.floor(this.camX) - FX_PAD;
+    const cy = Math.floor(this.camY) - FX_PAD;
     const t = this.t;
     const P = DAY;
-    const W = VIEW.w;
-    const H = VIEW.h;
+    const W = VIEW.w + FX_PAD * 2;
+    const H = VIEW.h + FX_PAD * 2;
 
     // 浪花、闪光
-    const u = this.under.context;
+    const u = this.under.tex.context;
     u.clearRect(0, 0, W, H);
     u.fillStyle = P.foam as string;
     const S = this.surf;
@@ -675,7 +682,7 @@ export class IslandScene extends Phaser.Scene {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const h = S[i + 2];
       const n = S[i + 3];
-      if (Math.sin(h * 0.6 - t * ANIM.surfPhase + n * 7) > 0.74 || (h > -1.6 && Math.sin(t * 1.4 + S[i] * 0.21 + n * 5) > -0.3)) u.fillRect(x, y, 1, 1);
+      if (Math.sin(h * 0.6 - t * ANIM.surfPhase + n * 7) > 0.74 || (h > -1.6 && Math.sin(t * ANIM.surfSparkle + S[i] * 0.21 + n * 5) > -0.3)) u.fillRect(x, y, 1, 1);
     }
     u.fillStyle = P.glint as string;
     const G = this.glints;
@@ -719,10 +726,11 @@ export class IslandScene extends Phaser.Scene {
       px(u, P, 'foam', rx - 21 + rp * 2 - cx, ry + bob - cy, 4, 1);
       px(u, P, 'foam', rx + 17 - rp * 2 - cx, ry + bob - cy, 4, 1);
     }
-    this.under.refresh();
+    this.under.tex.refresh();
+    this.under.img.setPosition(cx, cy);
 
     // 篝火、炊烟、海鸥、亮着的窗
-    const c = this.over.context;
+    const c = this.over.tex.context;
     c.clearRect(0, 0, W, H);
     const spots: Spot[] = [];
     const beams: Beam[] = [];
@@ -769,8 +777,11 @@ export class IslandScene extends Phaser.Scene {
     const gull = Sp[Math.floor(t * ANIM.gullFps) % 2 ? 'gull1' : 'gull2'];
     if (gull) {
       const g1 = this.textures.get(Math.floor(t * ANIM.gullFps) % 2 ? 'gull1' : 'gull2').getSourceImage() as HTMLCanvasElement;
-      c.drawImage(g1, Math.round(((t * 15) % 560) - 40), Math.round(70 + Math.sin(t * 1.1) * 6));
-      c.drawImage(g1, Math.round(520 - ((t * 11 + 260) % 560)), Math.round(30 + Math.sin(t * 0.9 + 1) * 5));
+      // 海鸥沿着画面飞过（位置按镜头算，画进世界坐标的画布）
+      const vx = this.camX - cx;
+      const vy = this.camY - cy;
+      c.drawImage(g1, Math.round(vx + ((t * 15) % 560) - 40), Math.round(vy + 70 + Math.sin(t * 1.1) * 6));
+      c.drawImage(g1, Math.round(vx + 520 - ((t * 11 + 260) % 560)), Math.round(vy + 30 + Math.sin(t * 0.9 + 1) * 5));
     }
     // 鱼线：从人物手里到浮漂，深色，画在最上层
     const fo = this.pending?.obj;
@@ -786,21 +797,35 @@ export class IslandScene extends Phaser.Scene {
       }
     }
     this.parts.draw(c, P, cx, cy);
-    this.over.refresh();
+    this.over.tex.refresh();
+    this.over.img.setPosition(cx, cy);
 
     // 雾
     paintFog(this.fogImg, this.R.fog, this.R.w, this.R.h, cx, cy, t);
-    this.fog.context.putImageData(this.fogImg, 0, 0);
-    this.fog.refresh();
+    this.fog.tex.context.putImageData(this.fogImg, 0, 0);
+    this.fog.tex.refresh();
+    this.fog.img.setPosition(cx, cy);
 
-    // 灯光遮罩
+    // 灯光的位置换成世界坐标，遮罩每帧按镜头画（paintLights）
+    this.spots = spots.map(([x, y, r]) => [x + cx, y + cy, r]);
+    this.beams = beams.map(([x, y, l, a, hw]) => [x + cx, y + cy, l, a, hw]);
+  }
+
+  /** 灯光遮罩和屏幕对齐（着色器按屏幕坐标读它），所以每帧按当前镜头重画 */
+  private paintLights(strength: number): void {
     const useMask = strength > LIGHTS.maskFrom;
     if (this.pipe) this.pipe.useMask = useMask;
-    if (useMask) {
-      paintMask(this.maskImg, spots, beams);
-      this.mask.context.putImageData(this.maskImg, 0, 0);
-      this.mask.refresh();
-    }
+    if (!useMask) return;
+    const cx = Math.floor(this.camX);
+    const cy = Math.floor(this.camY);
+    if (this.pipe) this.pipe.maskOff = [this.camX - cx, this.camY - cy];
+    paintMask(
+      this.maskImg,
+      this.spots.map(([x, y, r]) => [x - cx, y - cy, r]),
+      this.beams.map(([x, y, l, a, hw]) => [x - cx, y - cy, l, a, hw]),
+    );
+    this.mask.context.putImageData(this.maskImg, 0, 0);
+    this.mask.refresh();
   }
 }
 

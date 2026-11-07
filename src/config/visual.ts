@@ -59,13 +59,15 @@ export const LIGHTS = {
   maskFrom: 0.05,
 };
 
-/** 雾：飘动速度（像素/秒）与阈值（沿用设计稿） */
-export const FOG = { driftX: 5, driftY: 1.6, gain: 1.35, noise: 0.85, bias: -0.18, on: 0.22, onBayer: 0.5, dense: 0.3, denseBayer: 0.3 };
+/** 雾：飘动速度（像素/秒）与阈值。飘得慢、两层同向（layer2 为第二层的相对速度），走动时不晕 */
+export const FOG = { driftX: 2, driftY: 0.6, layer2: 0.6, gain: 1.35, noise: 0.85, bias: -0.18, on: 0.22, onBayer: 0.5, dense: 0.3, denseBayer: 0.3 };
 
 /** 动画节奏 */
 export const ANIM = {
   walkFps: 8,
-  surfPhase: 2.2,
+  /** 浪花往岸上推的速度（弧度/秒）；sparkle 为浪尖闪烁的速度 */
+  surfPhase: 1.6,
+  surfSparkle: 0.8,
   glintPeriod: 1.8,
   fireFps: 10,
   gullFps: 4,

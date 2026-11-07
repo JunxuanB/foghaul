@@ -1,13 +1,14 @@
 // 灯光遮罩：实心圆 + 外圈棋盘格，加灯塔光束。画在屏幕坐标的 480 × 270 canvas 上。
-import { LIGHTS, VIEW } from '../../config/visual';
+import { LIGHTS } from '../../config/visual';
 import { mod } from '../../art/noise';
 
 export type Spot = [x: number, y: number, r: number];
 export type Beam = [x: number, y: number, len: number, angle: number, halfWidth: number];
 
+/** 遮罩画布比画面大 1 像素（着色器按镜头的小数偏移读） */
 export function paintMask(img: ImageData, spots: Spot[], beams: Beam[]): void {
-  const W = VIEW.w;
-  const H = VIEW.h;
+  const W = img.width;
+  const H = img.height;
   const u = new Uint32Array(img.data.buffer);
   const ON = 0xffffffff;
   u.fill(0);
