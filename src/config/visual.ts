@@ -106,3 +106,16 @@ export const ANIM = {
   /** 世界和画面的重画间隔（秒）：浪花、雾、灯光遮罩 */
   fxInterval: 1 / 30,
 };
+
+/** 设施停工 / 运转的原因 → 图标（设施面板的状态、世界里设施头顶的标记共用） */
+export const WORK_ICON: Record<string, string> = {
+  'work.ok': 'ui_check',
+  'work.nobody': 'ui_personEmpty',
+  'work.starved': 'ui_bowlEmpty',
+  'work.baseOnly': 'ui_bowlEmpty',
+  'work.partial': 'ui_bowlEmpty',
+  'work.sleepy': 'ui_warn',
+  'work.full': 'ui_stock',
+  'work.noInput': 'ui_warn',
+  'work.noFacility': 'ui_warn',
+};

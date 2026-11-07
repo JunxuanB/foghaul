@@ -3,7 +3,8 @@ import { useEffect } from 'react';
 import { RECIPES } from '../../config/recipes';
 import { t } from '../../i18n';
 import { useGame, useStore } from '../../store/hooks';
-import { ItemIcon, ItemName } from '../components/Item';
+import { ItemIcon } from '../components/Item';
+import { Cell, Icon } from '../components/Kit';
 import type { ItemId } from '../../config/items';
 
 export function RecipePopup() {
@@ -29,14 +30,13 @@ export function RecipePopup() {
           </span>
         )}
         <div className="eq">
-          {ins.length === 0 && <span>{t('ui.seawater')}</span>}
-          {ins.map(([id, n]) => (
-            <ItemName key={id} id={id} n={n} />
-          ))}
-          <span>→</span>
-          {outs.map((id) => (
-            <ItemName key={id} id={id} n={def.outputs[id]} />
-          ))}
+          {ins.length === 0 ? <Cell id="water" label={t('ui.seawater')} /> : <span className="k-cells">{ins.map(([id, n]) => <Cell key={id} id={id} need={n} />)}</span>}
+          <Icon id="ui_arrow" size={8} />
+          <span className="k-cells">
+            {outs.map((id) => (
+              <Cell key={id} id={id} need={def.outputs[id]} />
+            ))}
+          </span>
         </div>
         <p>{t('ui.newRecipeWhere')}</p>
         <button className="u-btn" autoFocus onClick={() => store.dispatch({ t: 'ackRecipes' })}>

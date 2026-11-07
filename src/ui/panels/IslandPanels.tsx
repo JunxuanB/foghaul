@@ -1,202 +1,241 @@
 // 岛上建筑的面板：木筏（停在码头边：货舱装卸、改造）、设施（生产、工人、吃饭、升级）。
 // 一个建筑一个功能：货舱和木筏改造在木筏旁，岛的升级在设施旁（docs/2d-design.md “玩法梳理”）。
+// 版面是“建筑详情”模板：左边建筑的图和等级星，右边一张张小卡，主按钮在右下。
+import { useState } from 'react';
 import { BALANCE } from '../../config/balance';
 import { ITEM_ORDER, type ItemId } from '../../config/items';
-import { t, tm } from '../../i18n';
+import { RECIPES } from '../../config/recipes';
+import { WORK_ICON } from '../../config/visual';
+import { t } from '../../i18n';
 import { buildCost, canUseStock, here } from '../../sim/actions';
 import { canLevelUp, islandRate, upgradeCostOf } from '../../sim/economy';
-import { facilityName } from '../../sim/interact';
-import { canPay, costAvailable, slotsUsed, slotView, stockCap } from '../../sim/inventory';
-import { stockP } from '../../sim/msg';
+import { charOf, facilityName, facilitySprite } from '../../sim/interact';
+import { canPay, stockCap } from '../../sim/inventory';
 import { residentsOf, workersAt } from '../../sim/people';
-import type { Stock } from '../../sim/types';
+import type { Facility } from '../../sim/types';
 import { useGame, useStore } from '../../store/hooks';
-import { ItemIcon, ItemName, Slot } from '../components/Item';
-import { Panel } from './Panel';
+import { Bowls, Card, label, Chip, CostGrid, Icon, Meter, Picture, Portrait, Stars } from '../components/Kit';
+import { Panel, Soon } from './Panel';
+import { FocusActions, FocusStatus, PackHoldBody, useFocus } from './Views';
 
-/** 一个容器按格子画（每格一种东西，超过堆叠上限拆开）；零件另列 */
-export function SlotGrid({ stock, slots, onPick, title }: { stock: Stock; slots: number; onPick?: (id: ItemId) => void; title?: (id: ItemId) => string }) {
-  const v = slotView(stock);
-  return (
-    <>
-      <div className="grid-slots">
-        {Array.from({ length: Math.max(slots, v.slots.length) }, (_, i) => {
-          const c = v.slots[i];
-          return <Slot key={i} id={c?.id} n={c?.n} onClick={c && onPick ? () => onPick(c.id) : undefined} title={c && title ? title(c.id) : undefined} />;
-        })}
-      </div>
-      {v.keys.length > 0 && (
-        <div className="rows">
-          <span className="u-label">{t('ui.keyItems')}</span>
-          <div className="seg">
-            {v.keys.map((k) => (
-              <ItemName key={k.id} id={k.id} n={k.n} />
-            ))}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
+const E = BALANCE.economy;
 
-/** 背包和货舱两栏，点一下在两边之间搬（海上按 Tab、或在码头边的木筏旁） */
-export function PackHold({ canMove }: { canMove: boolean }) {
-  const g = useGame();
-  const store = useStore();
-  const p = g.player;
-  const move = (id: ItemId, from: 'pack' | 'hold') => {
-    const src = from === 'pack' ? p.pack : p.hold;
-    store.dispatch({ t: 'transfer', item: id, from, to: from === 'pack' ? 'hold' : 'pack', n: src[id] ?? 0 });
-  };
-  return (
-    <div className="cols">
-      <div>
-        <h3>
-          {t('ui.pack')} <span className="u-dim">{t('ui.slotsUsed', { n: slotsUsed(p.pack), cap: BALANCE.inventory.packCap })}</span>
-        </h3>
-        <SlotGrid stock={p.pack} slots={BALANCE.inventory.packCap} onPick={canMove ? (id) => move(id, 'pack') : undefined} title={(id) => t('ui.toHold', { item: { k: 'item.' + id } })} />
-      </div>
-      <div>
-        <h3>
-          {t('ui.hold')} <span className="u-dim">{t('ui.slotsUsed', { n: slotsUsed(p.hold), cap: p.holdCap })}</span>
-        </h3>
-        <SlotGrid stock={p.hold} slots={p.holdCap} onPick={canMove ? (id) => move(id, 'hold') : undefined} title={(id) => t('ui.toPack', { item: { k: 'item.' + id } })} />
-      </div>
-    </div>
-  );
-}
-
-/** 木筏（停在码头边）：货舱和背包之间搬东西，全部卸到这座岛的仓库，加固货舱 */
+/** 木筏（停在码头边）：货舱 ↔ 背包、全部卸到仓库；改造货舱 */
 export function RaftPanel() {
   const g = useGame();
   const store = useStore();
+  const [tab, setTab] = useState('hold');
+  const [focus, setFocus] = useFocus();
   const isl = here(g);
   const own = canUseStock(isl) ? isl : undefined;
-  const holdIds = ITEM_ORDER.filter((id) => (g.player.hold[id] ?? 0) > 0);
+  const p = g.player;
+  const holdIds = ITEM_ORDER.filter((id) => (p.hold[id] ?? 0) > 0);
   const unloadAll = () => {
-    for (const id of holdIds) store.dispatch({ t: 'transfer', item: id, from: 'hold', to: 'stock', n: g.player.hold[id] ?? 0 });
+    for (const id of holdIds) store.dispatch({ t: 'transfer', item: id, from: 'hold', to: 'stock', n: p.hold[id] ?? 0 });
   };
   const cost = buildCost(g, 'holdUpgrade');
   const ok = !!cost && canPay(g, own, cost);
+  const tabs = [
+    { id: 'hold', label: t('ui.tabHold') },
+    { id: 'upgrade', label: t('ui.tabUpgrade') },
+  ];
+  if (tab === 'hold')
+    return (
+      <Panel
+        title={t('thing.raft')}
+        icon="ui_hold"
+        tabs={tabs}
+        tab={tab}
+        onTab={setTab}
+        status={<FocusStatus g={g} focus={focus} src={{ pack: p.pack, hold: p.hold, stock: undefined }} />}
+        actions={
+          <>
+            <FocusActions focus={focus} canMoveHold />
+            {own && (
+              <button className="u-btn sec" disabled={!holdIds.length} onClick={unloadAll}>
+                {t('ui.unloadAll')}
+              </button>
+            )}
+          </>
+        }
+      >
+        <PackHoldBody canMove focus={focus} setFocus={setFocus} />
+      </Panel>
+    );
+  const step = BALANCE.home.holdUpgrade.step;
   return (
-    <Panel title={t('thing.raft')} sub={t('ui.raftHint')} wide>
-      <PackHold canMove />
-      <div className="seg">
-        {own && (
-          <button className="u-btn sec" disabled={!holdIds.length} onClick={unloadAll}>
-            {t('ui.unloadAll')}
-          </button>
-        )}
-        {!own && <span className="u-dim">{t('ui.unloadNeedsNetwork')}</span>}
-      </div>
-      <h3>{t('ui.raftUpgrade')}</h3>
-      {cost ? (
-        <div className="recipe">
-          <span className="big">
-            <ItemIcon id="wood" />
-          </span>
-          <div>
-            <div>{t('ui.holdUpgrade', { from: g.player.holdCap, to: g.player.holdCap + BALANCE.home.holdUpgrade.step })}</div>
-            <div className="ins">
-              {Object.entries(cost).map(([id, n]) => (
-                <span key={id} className={costAvailable(g, own, id as ItemId) >= (n ?? 0) ? '' : 'lack'}>
-                  <ItemName id={id as ItemId} /> {Math.min(costAvailable(g, own, id as ItemId), 99)}/{n}
-                </span>
-              ))}
-            </div>
-          </div>
+    <Panel
+      title={t('thing.raft')}
+      icon="ui_hold"
+      tabs={tabs}
+      tab={tab}
+      onTab={setTab}
+      status={!cost ? <span className="u-dim">{t('ui.holdMaxed')}</span> : !ok ? <span className="tone-b">{t('ui.lack')}</span> : null}
+      actions={
+        cost && (
           <button className="u-btn" disabled={!ok} onClick={() => store.dispatch({ t: 'build', what: 'holdUpgrade' })}>
             {t('ui.make')}
           </button>
+        )
+      }
+    >
+      <div className="v-building">
+        <Picture sprite="raft" />
+        <div className="v-stack">
+          <Card title={t('ui.hold')} icon="ui_hold">
+            <div className="v-gain">
+              <span>{t('ui.holdSlots', { n: p.holdCap })}</span>
+              {cost && (
+                <>
+                  <Icon id="ui_arrow" size={8} />
+                  <b>{t('ui.holdSlots', { n: p.holdCap + step })}</b>
+                </>
+              )}
+            </div>
+          </Card>
+          {cost && (
+            <Card title={t('ui.condCost')} icon="wood">
+              <CostGrid g={g} cost={cost} src={own} />
+            </Card>
+          )}
         </div>
-      ) : (
-        <p className="u-dim">{t('ui.holdMaxed')}</p>
-      )}
+      </div>
     </Panel>
   );
 }
 
-/** 设施：在生产 / 加工什么、谁在干活、每小时多少、库存、为什么停了；吃饭和升级；培训（下一阶段） */
+/** 设施的产物（加工设施取配方的第一个产物） */
+function productOf(f: Facility): ItemId | undefined {
+  if (f.kind === 'produce') return f.item;
+  return Object.keys(RECIPES[f.recipe].outputs)[0] as ItemId | undefined;
+}
+
+/**
+ * 设施：先看“在产什么、每小时多少、仓库满没满、为什么停”，再看“谁在干活”，最后是升级卡。
+ * 升级卡：连续吃饱画成碗，材料画成格子，升级后的变化画成“现在 → 以后”。两个条件都满足，右下的“升级”才亮。
+ */
 export function FacilityPanel() {
   const g = useGame();
   const store = useStore();
+  const [tab, setTab] = useState('main');
   const isl = here(g);
   if (!isl || !isl.facility) return null;
   const fac = isl.facility;
   const r = islandRate(g, isl);
+  const note = r.rate > 0 ? r.note : isl.workNote && r.note === 'work.ok' ? isl.workNote : r.note;
+  const ok = r.rate > 0 && note === 'work.ok';
   const workers = workersAt(g, isl);
   const people = residentsOf(g, isl);
-  const product: ItemId | undefined = fac.kind === 'produce' ? fac.item : undefined;
-  const need = BALANCE.economy.mealsToUpgrade;
+  const idle = people.filter((p) => !workers.includes(p));
+  const product = productOf(fac);
+  const need = E.mealsToUpgrade;
   const cost = upgradeCostOf(isl);
-  const ready = isl.mealStreak >= need;
-  const canPayUp = !!cost && canPay(g, isl, cost);
+  const canUp = canLevelUp(isl) && !!cost;
+  const mealsOk = isl.mealStreak >= need;
+  const payOk = !!cost && canPay(g, isl, cost);
+  const now = E.levels[isl.level - 1];
+  const next = E.levels[isl.level];
+  const seats = Math.max(now.people, people.length);
+  const tabs = [
+    { id: 'main', label: t('ui.tabFacility') },
+    { id: 'train', label: t('ui.tabTraining'), soon: true },
+  ];
+  const status = !canUp ? (
+    <span className="u-dim">{t('ui.maxLevel')}</span>
+  ) : mealsOk && payOk ? (
+    <Chip icon="ui_check" tone="ok">
+      {t('ui.canUpgrade')}
+    </Chip>
+  ) : !mealsOk ? (
+    <Chip icon="ui_bowlEmpty" tone="warn">
+      {t('ui.needMeals', { n: need - isl.mealStreak })}
+    </Chip>
+  ) : (
+    <Chip icon="ui_warn" tone="warn">
+      {t('ui.lack')}
+    </Chip>
+  );
   return (
-    <Panel title={tm(facilityName(fac))} sub={t('ui.facilityLevel', { lv: isl.level })} wide>
-      <div className="rows">
-        <div>
-          <span>{t('ui.output')}</span>
-          <span className={r.rate > 0 ? '' : 'tone-b'}>{r.rate > 0 ? t('ui.perHour', { n: Math.round(r.rate * 10) / 10 }) : t(r.note || isl.workNote || 'work.nobody')}</span>
-        </div>
-        {product && (
-          <div>
-            <span>
-              <ItemName id={product} />
-            </span>
-            <span>
-              {isl.stock[product] ?? 0}/{stockCap(g, isl, product)}
-            </span>
-          </div>
-        )}
-        <div>
-          <span>{t('ui.workers')}</span>
-          <span>{workers.length ? workers.map((p) => tm(p.name)).join('、') : t('ui.noWorkers')}</span>
-        </div>
-        {people.length > workers.length && (
-          <div>
-            <span className="u-dim">{t('ui.idle')}</span>
-            <span className="u-dim">
-              {people
-                .filter((p) => !workers.includes(p))
-                .map((p) => tm(p.name))
-                .join('、')}
-            </span>
-          </div>
-        )}
-        <div>
-          <span>{t('ui.meals')}</span>
-          <span className={isl.lastMeal === 'full' ? 'tone-g' : isl.lastMeal ? 'tone-b' : ''}>{isl.lastMeal ? t('ui.mealState.' + isl.lastMeal) : t('ui.mealNotYet')}</span>
-        </div>
-      </div>
-      <h3>{t('ui.islandUpgrade')}</h3>
-      {canLevelUp(isl) && cost ? (
-        <>
-          <p>{t('ui.upgradeRule', { n: need })}</p>
-          <div className="rows">
-            <div>
-              <span className={ready ? 'tone-g' : ''}>{t('ui.mealStreak', { n: Math.min(isl.mealStreak, need), total: need })}</span>
-              <span />
-            </div>
-            <div>
-              <span>{t('ui.cost')}</span>
-              <span className={canPayUp ? '' : 'tone-b'}>{t('ui.stockList', { list: stockP(cost) })}</span>
-            </div>
-            <div>
-              <span className="u-dim">{t('ui.nextLevel', { lv: isl.level + 1 })}</span>
-              <span className="u-dim">{t('ui.nextLevelGain', { cap: BALANCE.economy.levels[isl.level].cap, people: BALANCE.economy.levels[isl.level].people, mult: BALANCE.economy.levels[isl.level].mult })}</span>
-            </div>
-          </div>
-          <div className="seg">
-            <button className="u-btn" disabled={!ready || !canPayUp} onClick={() => store.dispatch({ t: 'upgradeIsland' })}>
-              {t('ui.upgrade')}
-            </button>
-          </div>
-        </>
+    <Panel
+      title={label(facilityName(fac))}
+      icon={product}
+      tabs={tabs}
+      tab={tab}
+      onTab={setTab}
+      status={tab === 'main' ? status : null}
+      actions={
+        tab === 'main' &&
+        canUp && (
+          <button className="u-btn" disabled={!mealsOk || !payOk} onClick={() => store.dispatch({ t: 'upgradeIsland' })}>
+            {t('ui.upgradeTo', { lv: isl.level + 1 })}
+          </button>
+        )
+      }
+    >
+      {tab === 'train' ? (
+        <Soon />
       ) : (
-        <p className="u-dim">{t('ui.maxLevel')}</p>
+        <div className="v-building">
+          <Picture sprite={facilitySprite(fac)}>
+            <Stars lv={isl.level} max={E.levels.length} />
+          </Picture>
+          <div className="v-stack">
+            {/* 第一眼：在产什么、多快、仓库、为什么停 */}
+            <Card cls="main" title={t('ui.produces')} icon="ui_clock" right={<Chip icon={WORK_ICON[note] ?? 'ui_warn'} tone={ok ? 'ok' : 'warn'}>{t(note)}</Chip>}>
+              <div className="v-output">
+                {product && (
+                  <span className="v-item-big">
+                    <Icon id={product} size={24} />
+                  </span>
+                )}
+                <b className={'v-rate' + (r.rate > 0 ? '' : ' off')}>{t('ui.perHourShort', { n: Math.round(r.rate * 10) / 10 })}</b>
+                {product && <Meter value={isl.stock[product] ?? 0} max={stockCap(g, isl, product)} icon="ui_stock" />}
+              </div>
+            </Card>
+            {/* 第二眼：谁在干活、空位 */}
+            <Card title={t('ui.workers')} icon="ui_person" right={<span className="u-dim">{`${workers.length}/${now.people}`}</span>}>
+              <span className="k-row">
+                {Array.from({ length: seats }, (_, i) => {
+                  const p = workers[i] ?? idle[i - workers.length];
+                  return p ? <Portrait key={i} char={charOf(p)} name={label(p.name) + (workers.includes(p) ? '' : ' · ' + t('ui.idleTag'))} dim={!workers.includes(p)} /> : <Portrait key={i} />;
+                })}
+              </span>
+            </Card>
+            {/* 最后：升级卡 */}
+            {canUp && cost && next && (
+              <Card cls="up" title={t('ui.upgradeTo', { lv: isl.level + 1 })} icon="ui_star">
+                <div className="v-up">
+                  <div>
+                    <span className="u-label">{t('ui.condMeals')}</span>
+                    <Bowls lit={Math.min(isl.mealStreak, need)} total={need} />
+                  </div>
+                  <div>
+                    <span className="u-label">{t('ui.condCost')}</span>
+                    <CostGrid g={g} cost={cost} src={isl} />
+                  </div>
+                  <div className="v-gains">
+                    <span className="u-label">{t('ui.gain')}</span>
+                    <Gain icon={product ?? 'ui_clock'} label={t('ui.gainRate')} a={'×' + now.mult} b={'×' + next.mult} />
+                    <Gain icon="ui_stock" label={t('ui.gainCap')} a={now.cap} b={next.cap} />
+                    <Gain icon="ui_person" label={t('ui.gainPeople')} a={now.people} b={next.people} />
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
       )}
-      <h3>{t('ui.training')}</h3>
-      <p className="u-dim">{t('ui.trainingSoon')}</p>
     </Panel>
+  );
+}
+
+function Gain({ icon, label, a, b }: { icon: string; label: string; a: string | number; b: string | number }) {
+  return (
+    <span className="v-gain" title={label}>
+      <Icon id={icon} size={8} />
+      <span>{a}</span>
+      <Icon id="ui_arrow" size={8} />
+      <b>{b}</b>
+    </span>
   );
 }

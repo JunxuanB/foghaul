@@ -7,7 +7,7 @@ import { hash } from '../../art/noise';
 import { DAY, type Pal } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
-import { ANIM, LIGHTS, VIEW } from '../../config/visual';
+import { ANIM, LIGHTS, VIEW, WORK_ICON } from '../../config/visual';
 import { currentGuide } from '../../sim/guide';
 import { carried, slotView } from '../../sim/inventory';
 import { interactInfo, objectsOn, personOfObj } from '../../sim/interact';
@@ -516,14 +516,34 @@ export class IslandScene extends WorldScene {
     return this.objs.find((o) => o.kind === 'raft');
   }
 
-  /** 设施头顶：进度条（这一批做了多少），停工时一个“!”（原因在设施面板里） */
-  private drawFacilityStatus(c: CanvasRenderingContext2D, P: Pal, x: number, y: number): void {
+  /**
+   * 设施头顶：运转时一根进度条（这一批做了多少），下面一排等级小星；
+   * 停工时换成一个气泡，里面是停工原因的图标（缺人、缺饭、满仓……，和设施面板同一套 WORK_ICON），慢慢上下浮。
+   * 等级也画在建筑上：2 级起屋顶插一面小旗，3 级两面。
+   */
+  private drawFacilityStatus(c: CanvasRenderingContext2D, P: Pal, x: number, y: number, top: number, left: number): void {
     const isl = this.state.islands.find((i) => i.id === this.isl);
     if (!isl) return;
+    for (let i = 1; i < isl.level; i++) {
+      const fx = left + 3 + (i - 1) * 6;
+      px(c, P, 'o', fx - 1, top - 9, 3, 11);
+      px(c, P, 'w1', fx, top - 8, 1, 10);
+      px(c, P, 'o', fx + 1, top - 9, 5, 5);
+      px(c, P, i === 1 ? 'x2' : 'y1', fx + 1, top - 8, 4, 3);
+    }
     const r = islandRate(this.state, isl);
     if (r.rate <= 0 || isl.sleepy) {
-      const bang = this.textures.get('ui_bang').getSourceImage() as HTMLCanvasElement;
-      if (Math.floor(this.t * 2) % 2) c.drawImage(bang, Math.round(x - bang.width / 2), Math.round(y - bang.height));
+      const note = r.note === 'work.ok' ? isl.workNote || 'work.nobody' : r.note;
+      const key = 'ic_' + (WORK_ICON[note] ?? 'ui_warn');
+      if (!this.textures.exists(key)) return;
+      const ic = this.textures.get(key).getSourceImage() as HTMLCanvasElement;
+      const by = y - 20 + Math.round(Math.sin(this.t * 2) * 1);
+      px(c, P, 'o', x - 10, by - 1, 20, 20);
+      px(c, P, 'i0', x - 9, by, 18, 18);
+      px(c, P, 'x2', x - 9, by, 18, 1);
+      px(c, P, 'o', x - 2, by + 19, 4, 2);
+      px(c, P, 'o', x - 1, by + 21, 2, 1);
+      c.drawImage(ic, x - 8, by + 1);
       return;
     }
     const w = 16;
@@ -717,7 +737,7 @@ export class IslandScene extends WorldScene {
           const [fx, fy] = g.meta.flame as [number, number];
           spots.push([ox + fx, oy + fy, LIGHTS.doorLamp * strength]);
         }
-        this.drawFacilityStatus(c, P, o.x - cx, oy - 4);
+        this.drawFacilityStatus(c, P, o.x - cx, oy - 4, oy, ox);
       }
     }
     const gull = Sp[Math.floor(t * ANIM.gullFps) % 2 ? 'gull1' : 'gull2'];

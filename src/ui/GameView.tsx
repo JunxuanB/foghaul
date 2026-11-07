@@ -1,6 +1,7 @@
 // 游戏画面：Phaser 画布 + 叠在上面的 DOM 界面层，两者按同一个整数倍 k 放大。
 import { useEffect, useRef } from 'react';
 import type Phaser from 'phaser';
+import { BALANCE } from '../config/balance';
 import { VIEW } from '../config/visual';
 import { useStore, useView, useViewStore } from '../store/hooks';
 import { Hud } from './hud/Hud';
@@ -34,7 +35,7 @@ export function GameView() {
   const k = v.k;
   return (
     <div className="stage-wrap" ref={outer}>
-      <div className="stage" style={{ width: VIEW.w * k, height: VIEW.h * k, ['--k' as string]: k }}>
+      <div className="stage" style={{ width: VIEW.w * k, height: VIEW.h * k, ['--k' as string]: k, ['--pw' as string]: BALANCE.ui.panel.w, ['--ph' as string]: BALANCE.ui.panel.h }}>
         <div className="canvas-host" ref={host} />
         <Hud />
         <div className="hud">

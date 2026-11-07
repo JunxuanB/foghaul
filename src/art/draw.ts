@@ -125,3 +125,12 @@ export function charURL(id: string, dir: S.Dir = 'down'): string {
   if (iconUrls[k]) return iconUrls[k];
   return (iconUrls[k] = gridCanvas(allSprites()[k]).toDataURL());
 }
+
+/** 任意精灵（建筑、木筏……）的 dataURL，面板里当“图”用 */
+export function spriteURL(name: string): { url: string; w: number; h: number } {
+  const g = allSprites()[name];
+  if (!g) return { url: '', w: 0, h: 0 };
+  const k = 'sp_' + name;
+  if (!iconUrls[k]) iconUrls[k] = gridCanvas(g).toDataURL();
+  return { url: iconUrls[k], w: g.w, h: g.h };
+}

@@ -3,7 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { iconURL } from '../../art/draw';
 import { ANIM } from '../../config/visual';
-import { t, tm } from '../../i18n';
+import { t } from '../../i18n';
+import { reasonText } from '../components/Kit';
 import { useView, useViewStore } from '../../store/hooks';
 
 export function WorldLayer() {
@@ -91,7 +92,7 @@ export function WorldLayer() {
         <div className="w-prompts" ref={promptRef}>
           {v.action ? (
             <>
-              <div className="w-chip">{tm(v.action.label)}</div>
+              <div className="w-chip">{reasonText(v.action.label)}</div>
               <div className="w-bar">
                 <i ref={barRef} />
               </div>
@@ -100,8 +101,8 @@ export function WorldLayer() {
             v.prompts.slice(0, 3).map((p, i) => (
               <div key={i} className={'w-chip' + (p.ok ? '' : ' off') + (p.warn ? ' warn' : '')}>
                 <b>{p.key}</b>
-                {tm(p.label)}
-                {!p.ok && p.reason && <span>（{tm(p.reason)}）</span>}
+                {reasonText(p.label)}
+                {!p.ok && p.reason && <span>· {reasonText(p.reason)}</span>}
               </div>
             ))
           )}

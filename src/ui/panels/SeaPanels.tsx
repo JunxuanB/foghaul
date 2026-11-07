@@ -3,16 +3,17 @@ import { useEffect, useRef } from 'react';
 import { BR } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ISLANDS } from '../../config/world';
-import { t, tm } from '../../i18n';
+import { t } from '../../i18n';
 import { buildCost, canUseStock, here } from '../../sim/actions';
-import { canPay, carriedForNeed, missingCost, needMsg } from '../../sim/inventory';
+import { canPay, carriedForNeed, needItems } from '../../sim/inventory';
+import { charOf } from '../../sim/interact';
 import { isLit } from '../../sim/map';
-import { stockP } from '../../sim/msg';
-import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
+import { useGame, useStore, useView } from '../../store/hooks';
+import { Card, Cell, label, Chip, CostGrid, Picture, Portrait } from '../components/Kit';
 import { Rich } from '../components/Text';
 import { Panel } from './Panel';
 
-/** 灯塔：主岛和修好的岛显示照亮半径；没修的显示成本，可以修 */
+/** 灯塔：建筑详情模板。修好的显示照亮范围；没修的显示修好后照多远、要什么材料，主按钮“修灯塔” */
 export function LighthousePanel() {
   const g = useGame();
   const store = useStore();
@@ -21,43 +22,67 @@ export function LighthousePanel() {
   const built = isl.buildings.lighthouse;
   const lv = Math.max(0, isl.level - 1);
   const r = isl.kind === 'home' ? BALANCE.map.homeLightRadius : BALANCE.map.lighthouseRadius[lv];
-  if (built)
-    return (
-      <Panel title={t('thing.lighthouse')}>
-        <p>{t('ui.lighthouseOn', { r })}</p>
-        <p className="u-dim">{t('ui.lighthouseHint')}</p>
-      </Panel>
-    );
   const cost = buildCost(g, 'lighthouse') ?? {};
   const src = canUseStock(isl) ? isl : undefined;
   const ok = canPay(g, src, cost);
   return (
-    <Panel title={t('ui.lighthouseBase')}>
-      <p>{t('ui.lighthouseBuildHint', { r: BALANCE.map.lighthouseRadius[lv] })}</p>
-      <div className="rows">
-        <div>
-          <span>{t('ui.cost')}</span>
-          <span>
-            {t('ui.stockList', { list: stockP(cost) })}
-          </span>
+    <Panel
+      title={t(built ? 'thing.lighthouse' : 'ui.lighthouseBase')}
+      icon="ui_eye"
+      status={built ? <Chip icon="ui_check" tone="ok">{t('ui.lightRadius', { r })}</Chip> : !ok ? <span className="tone-b">{t('ui.lack')}</span> : null}
+      actions={
+        !built && (
+          <button className="u-btn" disabled={!ok} onClick={() => store.dispatch({ t: 'build', what: 'lighthouse' })}>
+            {t('ui.buildLighthouse')}
+          </button>
+        )
+      }
+    >
+      <div className="v-building">
+        <Picture sprite={built ? 'light' : 'lhBase'} scale={3} />
+        <div className="v-stack">
+          <Card cls="main" title={built ? t('thing.lighthouse') : t('ui.afterBuild')} icon="ui_eye">
+            <div className="v-output">
+              <LightRings r={built ? r : BALANCE.map.lighthouseRadius[lv]} />
+              <b className="v-rate">{t('ui.lightRadius', { r: built ? r : BALANCE.map.lighthouseRadius[lv] })}</b>
+            </div>
+          </Card>
+          {!built && (
+            <Card title={t('ui.condCost')} icon="wood">
+              <CostGrid g={g} cost={cost} src={src} />
+            </Card>
+          )}
         </div>
-        {!ok && (
-          <div>
-            <span className="u-dim">{t('ui.missingLabel')}</span>
-            <span className="tone-b">{t('ui.stockList', { list: stockP(missingCost(g, src, cost)) })}</span>
-          </div>
-        )}
-      </div>
-      <div className="seg">
-        <button className="u-btn" disabled={!ok} onClick={() => store.dispatch({ t: 'build', what: 'lighthouse' })}>
-          {t('ui.buildLighthouse')}
-        </button>
       </div>
     </Panel>
   );
 }
 
-/** 和岛上的人说话：救援 / 招募要的东西、进度、交付 */
+/** 照亮范围的小示意：一个像素一格，亮的是灯塔照到的海，中间是灯塔 */
+function LightRings({ r }: { r: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const n = r * 2 + 3;
+  useEffect(() => {
+    const c = ref.current?.getContext('2d');
+    if (!c) return;
+    c.fillStyle = BR[1];
+    c.fillRect(0, 0, n, n);
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        const dx = x - (n >> 1);
+        const dy = y - (n >> 1);
+        if (dx * dx + dy * dy <= r * r) {
+          c.fillStyle = BR[(x + y) % 2 ? 4 : 3];
+          c.fillRect(x, y, 1, 1);
+        }
+      }
+    c.fillStyle = BR[11];
+    c.fillRect(n >> 1, n >> 1, 1, 1);
+  }, [n, r]);
+  return <canvas ref={ref} className="v-rings" width={n} height={n} style={{ ['--s' as string]: BALANCE.ui.lightDiagram }} />;
+}
+
+/** 对话：左边头像和名字，右边一句话（对白可以有强调色），下面是需要的东西（图标 + 已交 / 要多少 + 身上有多少），主按钮“交付” */
 export function TalkPanel() {
   const g = useGame();
   const store = useStore();
@@ -67,45 +92,62 @@ export function TalkPanel() {
   const who = v.talkTo ? g.people.find((p) => p.id === v.talkTo) : undefined;
   const def = ISLANDS.find((x) => x.id === isl.id);
   const need = def?.rescueNeed ?? def?.recruitNeed;
-  const title = who ? tm(who.name) : t('ui.villager');
+  const title = who ? label(who.name) : t('ui.villager');
+  const face = (
+    <div className="v-who">
+      <Portrait char={who ? charOf(who) : 'islander'} name={title} big />
+      {who?.role && t('role.' + who.role) !== title && <span className="u-dim">{t('role.' + who.role)}</span>}
+    </div>
+  );
   // 村落、进出口局：请求在请求板上（下一阶段开放）
   if (!need || isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau') {
     return (
-      <Panel title={title}>
-        <p>
-          <Rich s={t('island.' + isl.id + '.intro')} />
-        </p>
-        <p className="u-dim">{t('ui.villageSoon')}</p>
+      <Panel title={title} icon="ui_person" status={<span className="u-dim">{t('ui.villageSoon')}</span>}>
+        <div className="v-talk">
+          {face}
+          <p className="v-say">
+            <Rich s={t('island.' + isl.id + '.intro')} />
+          </p>
+        </div>
       </Panel>
     );
   }
   const done = need.every((n, i) => (isl.needProgress[i] ?? 0) >= n.n);
   const canGive = !done && need.some((n, i) => (isl.needProgress[i] ?? 0) < n.n && carriedForNeed(g, n) > 0);
   return (
-    <Panel title={title}>
-      <p>
-        <Rich s={done ? t(who?.active ? 'ui.talkThanks' : 'ui.talkDone') : t(isl.kind === 'native' ? 'ui.talkNative' : 'ui.talkPassenger')} />
-      </p>
-      {!done && (
-        <div className="rows">
-          {need.map((n, i) => (
-            <div key={i}>
-              <span>{tm(needMsg(n))}</span>
-              <span>
-                {t('ui.needProgress', { have: isl.needProgress[i] ?? 0, n: n.n })}
-                <span className="u-dim"> · {t('ui.youCarry', { n: carriedForNeed(g, n) })}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-      {!done && (
-        <div className="seg">
+    <Panel
+      title={title}
+      icon="ui_person"
+      status={done ? <Chip icon="ui_check" tone="ok">{t('ui.talkDoneShort')}</Chip> : !canGive ? <span className="tone-b">{t('ui.nothingToGive')}</span> : null}
+      actions={
+        !done && (
           <button className="u-btn" disabled={!canGive} onClick={() => store.dispatch({ t: 'deliver' })}>
             {t('ui.give')}
           </button>
-          {!canGive && <span className="u-dim">{t('ui.nothingToGive')}</span>}
-        </div>
+        )
+      }
+    >
+      <div className="v-talk">
+        {face}
+        <p className="v-say">
+          <Rich s={done ? t(who?.active ? 'ui.talkThanks' : 'ui.talkDone') : t(isl.kind === 'native' ? 'ui.talkNative' : 'ui.talkPassenger')} />
+        </p>
+      </div>
+      {!done && (
+        <Card title={t('ui.needs')} icon="ui_warn">
+          <span className="k-cells">
+            {need.map((n, i) => {
+              const have = isl.needProgress[i] ?? 0;
+              const carry = carriedForNeed(g, n);
+              return (
+                <span key={i} className="v-need">
+                  <Cell id={needItems(n)[0]} have={have} need={n.n} />
+                  <span className={'u-dim' + (carry > 0 && have < n.n ? ' tone-g' : '')}>{t('ui.carry', { n: carry })}</span>
+                </span>
+              );
+            })}
+          </span>
+        </Card>
       )}
     </Panel>
   );
@@ -118,7 +160,6 @@ export function MapPanel() {
   const g = useGame();
   const store = useStore();
   const v = useView();
-  const vs = useViewStore();
   const ref = useRef<HTMLCanvasElement>(null);
   const W = g.width;
   const H = g.height;
@@ -150,6 +191,8 @@ export function MapPanel() {
     c.fillRect(g.player.x * CELL, g.player.y * CELL, CELL, CELL);
   }, [g, g.time, W, H]);
   const k = v.k;
+  // 海图放大到正好填满面板内容区（面板大小固定，见 BALANCE.ui.panel）
+  const f = Math.min(BALANCE.ui.panel.bodyW / (W * CELL), BALANCE.ui.panel.bodyH / (H * CELL));
   const click = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const x = Math.floor(((e.clientX - r.left) / r.width) * W);
@@ -159,9 +202,21 @@ export function MapPanel() {
     store.dispatch({ t: 'setTarget', islandId: g.player.target === isl.id ? null : isl.id });
   };
   return (
-    <Panel title={t('ui.seaChart')} sub={t('ui.seaChartHint')} wide>
+    <Panel
+      title={t('ui.seaChart')}
+      icon="ui_eye"
+      status={
+        <span className="v-legend">
+          <span className="legend-sw" style={{ background: BR[0] }} /> {t('ui.legendFog')}
+          <span className="legend-sw" style={{ background: BR[2] }} /> {t('ui.legendOpen')}
+          <span className="legend-sw" style={{ background: BR[3] }} /> {t('ui.legendSeen')}
+          <span className="legend-sw" style={{ background: BR[7] }} /> {t('ui.legendYou')}
+        </span>
+      }
+      actions={<span className="u-dim">{t('ui.seaChartHint')}</span>}
+    >
       <div className="chart">
-        <canvas ref={ref} width={W * CELL} height={H * CELL} style={{ width: W * CELL * k * 1.2, height: H * CELL * k * 1.2 }} onClick={click} />
+        <canvas ref={ref} width={W * CELL} height={H * CELL} style={{ width: W * CELL * k * f, height: H * CELL * k * f }} onClick={click} />
         {g.islands
           .filter((i) => i.revealed && i.discovered)
           .map((i) => (
@@ -169,15 +224,6 @@ export function MapPanel() {
               {t('island.' + i.id)}
             </span>
           ))}
-      </div>
-      <div className="seg">
-        <span className="legend-sw" style={{ background: BR[0] }} /> {t('ui.legendFog')}
-        <span className="legend-sw" style={{ background: BR[2] }} /> {t('ui.legendOpen')}
-        <span className="legend-sw" style={{ background: BR[3] }} /> {t('ui.legendSeen')}
-        <span className="legend-sw" style={{ background: BR[7] }} /> {t('ui.legendYou')}
-        <button className="u-btn sec" onClick={() => vs.set({ panel: null })}>
-          {t('ui.close')}
-        </button>
       </div>
     </Panel>
   );

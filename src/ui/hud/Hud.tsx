@@ -90,7 +90,9 @@ function Goal() {
     <div className="hud-tr">
       <div className={'u-panel goal' + f}>
         <span className="u-label">{t('ui.goal')}</span>
-        <b>{title}</b>
+        <b>
+          <Rich s={title} />
+        </b>
         <p>
           <Rich s={detail} />
         </p>

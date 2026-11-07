@@ -1,44 +1,63 @@
 // 每个面板对应一个建筑或一个全局键（docs/2d-design.md 第 9 节“面板清单”）。
+// 外框都是 Panel（大小固定），内容用 Views 的模板和 Kit 的零件拼，不写说明句子。
+import { useState } from 'react';
+import { iconURL, spriteURL } from '../../art/draw';
 import { BALANCE } from '../../config/balance';
-import { ITEMS, ITEM_ORDER, PART_IDS, type ItemId } from '../../config/items';
+import { PART_IDS, type ItemId } from '../../config/items';
 import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
 import { LANGS, t, tm } from '../../i18n';
 import { canUseStock, craftBlock, here } from '../../sim/actions';
-import { costAvailable, slotsUsed, stockCap } from '../../sim/inventory';
+import { slotsUsed } from '../../sim/inventory';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
-import { ItemIcon, ItemName } from '../components/Item';
+import { Card, Cell, CostGrid, Icon, Key, Picture, reasonText, Yield } from '../components/Kit';
 import { Rich } from '../components/Text';
 import { useUi } from '../ui';
+import { FacilityPanel, RaftPanel } from './IslandPanels';
 import { Panel } from './Panel';
 import { LighthousePanel, MapPanel, TalkPanel } from './SeaPanels';
-import { FacilityPanel, PackHold, RaftPanel, SlotGrid } from './IslandPanels';
+import { Column, FocusActions, FocusStatus, PackHoldBody, SlotGrid, StockGrid, useFocus } from './Views';
 
-const list = (s: Partial<Record<ItemId, number>>) => ITEM_ORDER.filter((id) => (s[id] ?? 0) > 0);
+const P = BALANCE.inventory;
 
-/** 背包（Tab）：点可以吃喝的东西直接用。海上多一栏货舱，可以在两边之间搬；岛上看得到货舱，要到码头边的木筏旁才能搬 */
+/** 背包（Tab）。有木筏后多一栏货舱：海上可以直接搬，岛上要到木筏旁 */
 export function InventoryPanel() {
   const g = useGame();
-  const store = useStore();
   const p = g.player;
-  const cap = BALANCE.inventory.packCap;
-  const use = (id: ItemId) => {
-    if (ITEMS[id].eat) store.dispatch({ t: 'consume', from: 'pack', item: id });
-  };
-  if (p.hasRaft) {
-    const atSea = !p.at;
-    return (
-      <Panel title={t('ui.pack')} sub={atSea ? t('ui.packHoldSea') : t('ui.packHoldIsland')} wide>
-        <PackHold canMove={atSea} />
-        <p className="u-dim">{t('ui.stackRule', { a: BALANCE.inventory.stack.material, b: BALANCE.inventory.stack.consumable })}</p>
-      </Panel>
-    );
-  }
+  const [focus, setFocus] = useFocus();
+  const atSea = !p.at;
   return (
-    <Panel title={t('ui.pack')} sub={t('ui.slotsUsed', { n: slotsUsed(p.pack), cap })}>
-      <SlotGrid stock={p.pack} slots={cap} onPick={use} title={(id) => t('item.' + id) + (ITEMS[id].eat ? ' · ' + t('ui.clickToUse') : '')} />
-      <p className="u-dim">{list(p.pack).length === 0 ? t('ui.packEmpty') : t('ui.packHint')}</p>
-      <p className="u-dim">{t('ui.stackRule', { a: BALANCE.inventory.stack.material, b: BALANCE.inventory.stack.consumable })}</p>
+    <Panel
+      title={t('ui.pack')}
+      icon="ui_pack"
+      status={<FocusStatus g={g} focus={focus} src={{ pack: p.pack, hold: p.hold, stock: undefined }} />}
+      actions={<FocusActions focus={focus} canMoveHold={atSea && p.hasRaft} />}
+    >
+      {p.hasRaft ? (
+        <PackHoldBody canMove={atSea} focus={focus} setFocus={setFocus} />
+      ) : (
+        <div className="v-cols">
+          <Column icon="ui_pack" title={t('ui.pack')} right={t('ui.slotsUsed', { n: slotsUsed(p.pack), cap: P.packCap })}>
+            <SlotGrid stock={p.pack} slots={P.packCap} cols={4} where="pack" focus={focus} onFocus={setFocus} />
+          </Column>
+          <ItemCard id={focus?.where === 'pack' && (p.pack[focus.id] ?? 0) > 0 ? focus.id : undefined} />
+        </div>
+      )}
     </Panel>
+  );
+}
+
+/** 选中物品的大图卡（右栏）：图标、名字、用途 */
+function ItemCard({ id }: { id?: ItemId }) {
+  if (!id) return <div className="v-col v-empty" />;
+  const desc = t('itemdesc.' + id);
+  return (
+    <div className="v-col v-item">
+      <span className="v-item-big">
+        <Icon id={id} size={32} />
+      </span>
+      <b>{t('item.' + id)}</b>
+      {!desc.startsWith('itemdesc.') && <p>{desc}</p>}
+    </div>
   );
 }
 
@@ -46,141 +65,161 @@ function knownRecipes(g: ReturnType<typeof useGame>): RecipeId[] {
   return RECIPE_ORDER.filter((r) => g.player.recipes.includes(r) && !RECIPES[r].noFacility && !(r === 'raft' && g.player.hasRaft));
 }
 
-/** 制作（工作台） */
+/** 配方的图：产物图标；木筏用木筏的图 */
+function RecipeIcon({ r, size = 16 }: { r: RecipeId; size?: number }) {
+  const def = RECIPES[r];
+  if (def.special === 'raft') {
+    const s = spriteURL('raft');
+    return <img className="k-ic fit" src={s.url} alt="" style={{ ['--s' as string]: size }} />;
+  }
+  const out = Object.keys(def.outputs)[0];
+  return out ? <Icon id={out} size={size} /> : null;
+}
+
+/** 制作（工作台）：左边配方格，右边选中的配方：要什么 → 得到什么 */
 export function CraftPanel() {
   const g = useGame();
   const store = useStore();
   const isl = here(g);
   const src = canUseStock(isl) ? isl : undefined;
   const rs = knownRecipes(g);
+  const [pick, setPick] = useState<RecipeId | null>(null);
+  const cur = pick && rs.includes(pick) ? pick : rs.find((r) => !craftBlock(g, r)) ?? rs[0];
+  const def = cur ? RECIPES[cur] : undefined;
+  const block = cur ? craftBlock(g, cur) : null;
   return (
-    <Panel title={t('thing.workbench')} sub={t('ui.craftFrom')}>
-      {rs.length === 0 && <p>{t('ui.noRecipes')}</p>}
-      <div>
-        {rs.map((r) => {
-          const def = RECIPES[r];
-          const block = craftBlock(g, r);
-          const ins = Object.entries(def.inputs) as [ItemId, number][];
-          const outs = Object.entries(def.outputs) as [ItemId, number][];
-          return (
-            <div key={r} className="recipe">
-              <span className="big">{outs[0] ? <ItemIcon id={outs[0][0]} /> : null}</span>
-              <div>
-                <div>
-                  {t('recipe.' + r)} <span className="u-dim">· {t('ui.minutes', { n: def.manualMinutes })}</span>
-                </div>
-                <div className="ins">
-                  {ins.length === 0 && <span>{t('ui.seawater')}</span>}
-                  {ins.map(([id, n]) => {
-                    const have = costAvailable(g, src, id);
-                    return (
-                      <span key={id} className={have >= n ? '' : 'lack'}>
-                        <ItemName id={id} /> {Math.min(have, 99)}/{n}
-                      </span>
-                    );
-                  })}
-                  {def.special !== 'raft' && (
-                    <span>
-                      → {outs.map(([id, n]) => t('qty', { item: { k: 'item.' + id }, n })).join(' ')}
-                    </span>
-                  )}
-                </div>
-                {block && <div className="ins"><span className="lack">{tm(block)}</span></div>}
-              </div>
-              <button className="u-btn" disabled={!!block} onClick={() => store.dispatch({ t: 'craft', recipe: r })}>
-                {t('ui.make')}
-              </button>
+    <Panel
+      title={t('thing.workbench')}
+      icon="wood"
+      status={cur && block ? <span className="tone-b">{reasonText(block)}</span> : null}
+      actions={
+        cur && (
+          <button className="u-btn" disabled={!!block} onClick={() => store.dispatch({ t: 'craft', recipe: cur })}>
+            {t('ui.make')}
+          </button>
+        )
+      }
+    >
+      {rs.length === 0 || !cur || !def ? (
+        <p className="v-note">{t('ui.noRecipes')}</p>
+      ) : (
+        <div className="v-cols">
+          <Column icon="ui_clock" title={t('ui.recipes')}>
+            <div className="v-grid" style={{ ['--cols' as string]: 4 }}>
+              {rs.map((r) => (
+                <button key={r} type="button" className={'u-slot' + (r === cur ? ' sel' : '') + (craftBlock(g, r) ? ' off' : '')} onClick={() => setPick(r)} title={t('recipe.' + r)}>
+                  <RecipeIcon r={r} />
+                </button>
+              ))}
             </div>
-          );
-        })}
-      </div>
+          </Column>
+          <div className="v-col v-recipe">
+            <div className="v-recipe-name">
+              <span className="v-item-big">
+                <RecipeIcon r={cur} size={32} />
+              </span>
+              <div>
+                <b>{t('recipe.' + cur)}</b>
+                <span className="k-chip dim">
+                  <Icon id="ui_clock" size={8} />
+                  {t('ui.minutes', { n: def.manualMinutes })}
+                </span>
+              </div>
+            </div>
+            <div className="v-eq">
+              {Object.keys(def.inputs).length ? <CostGrid g={g} cost={def.inputs} src={src} /> : <span className="k-cells"><Cell id="water" label={t('ui.seawater')} /></span>}
+              <Icon id="ui_arrow" size={8} />
+              {def.special === 'raft' ? (
+                <span className="k-cells">
+                  <span className="k-cell">
+                    <span className="k-box">
+                      <RecipeIcon r={cur} />
+                    </span>
+                    <span className="k-num">×1</span>
+                  </span>
+                </span>
+              ) : (
+                <Yield items={Object.entries(def.outputs) as [string, number][]} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }
 
-/** 仓库（储物箱）：左边背包（格子），右边岛上仓库（每种物品各有上限）。点一下放进 / 取出 */
+/** 储物箱：左边背包，右边岛上仓库（每种物品一格，下沿是“数量 / 上限”）。点一下整格放进 / 取出 */
 export function ChestPanel() {
   const g = useGame();
   const store = useStore();
   const isl = here(g);
+  const [focus, setFocus] = useFocus();
   if (!isl || !canUseStock(isl)) return null;
   const move = (id: ItemId, from: 'pack' | 'stock') => {
     const src = from === 'pack' ? g.player.pack : isl.stock;
     store.dispatch({ t: 'transfer', item: id, from, to: from === 'pack' ? 'stock' : 'pack', n: src[id] ?? 0 });
   };
-  const ids = list(isl.stock);
   return (
-    <Panel title={t('thing.chest')} sub={t('ui.chestHint')} wide>
-      <div className="cols">
-        <div>
-          <h3>
-            {t('ui.pack')} <span className="u-dim">{t('ui.slotsUsed', { n: slotsUsed(g.player.pack), cap: BALANCE.inventory.packCap })}</span>
-          </h3>
-          <SlotGrid stock={g.player.pack} slots={BALANCE.inventory.packCap} onPick={(id) => move(id, 'pack')} title={(id) => t('ui.putIn', { item: { k: 'item.' + id } })} />
-        </div>
-        <div>
-          <h3>{t('ui.stock')}</h3>
-          {ids.length === 0 && <p className="u-dim">{t('ui.stockEmpty')}</p>}
-          <div className="stock-list">
-            {ids.map((id) => {
-              const n = isl.stock[id] ?? 0;
-              const cap = stockCap(g, isl, id);
-              const portable = ITEMS[id].portable;
-              return (
-                <div key={id} className="stock-line">
-                  <button
-                    type="button"
-                    className="stock-row"
-                    disabled={!portable}
-                    onClick={() => move(id, 'stock')}
-                    title={portable ? t('ui.takeOut', { item: { k: 'item.' + id } }) : t('ui.notPortable')}
-                  >
-                    <ItemName id={id} />
-                    <i style={{ ['--v' as string]: Math.min(1, n / Math.max(1, cap)) }} />
-                    <span className={n >= cap ? 'full' : ''}>
-                      {n}/{cap}
-                    </span>
-                  </button>
-                  {ITEMS[id].eat && (
-                    <button type="button" className="u-btn sec eat" onClick={() => store.dispatch({ t: 'consume', from: 'stock', item: id })}>
-                      {t(ITEMS[id].verb === 'drink' ? 'ui.drinkIt' : ITEMS[id].verb === 'use' ? 'ui.useIt' : 'ui.eatIt')}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p className="u-dim">{t('ui.stockRule')}</p>
-        </div>
+    <Panel
+      title={t('thing.chest')}
+      icon="ui_stock"
+      status={<FocusStatus g={g} isl={isl} focus={focus} src={{ pack: g.player.pack, hold: undefined, stock: isl.stock }} />}
+      actions={<FocusActions focus={focus} canStock />}
+    >
+      <div className="v-cols">
+        <Column icon="ui_pack" title={t('ui.pack')} right={t('ui.slotsUsed', { n: slotsUsed(g.player.pack), cap: P.packCap })}>
+          <SlotGrid stock={g.player.pack} slots={P.packCap} cols={4} where="pack" focus={focus} onFocus={setFocus} onPick={(id) => move(id, 'pack')} />
+        </Column>
+        <Column icon="ui_stock" title={t('ui.stock')}>
+          <StockGrid g={g} isl={isl} cols={6} focus={focus} onFocus={setFocus} onPick={(id) => move(id, 'stock')} />
+        </Column>
       </div>
     </Panel>
   );
 }
 
-/** 维修（直升机残骸）：M1 只看零件 */
+/** 维修（直升机残骸）：零件格：装好的打勾，背包里有的亮，缺的暗 */
 export function WreckPanel() {
   const g = useGame();
   return (
-    <Panel title={t('thing.wreck')}>
-      <p>{t('ui.wreckHint')}</p>
-      <div className="rows">
-        {PART_IDS.map((id) => (
-          <div key={id}>
-            <ItemName id={id} />
-            <span className="u-dim">{g.flags.partsInstalled.includes(id) ? t('ui.installed') : (g.player.pack[id] ?? 0) > 0 ? t('ui.inPack') : t('ui.partMissing')}</span>
-          </div>
-        ))}
+    <Panel title={t('thing.wreck')} icon="partRotor" status={<span className="u-dim">{t('ui.repairSoon')}</span>}>
+      <div className="v-building">
+        <Picture sprite="wreck" />
+        <div className="v-stack">
+          <Card title={t('ui.parts')} icon="partGear">
+            <span className="k-cells">
+              {PART_IDS.map((id) => {
+                const done = g.flags.partsInstalled.includes(id);
+                const have = (g.player.pack[id] ?? 0) > 0;
+                return <CellPart key={id} id={id} state={done ? 'done' : have ? 'have' : 'missing'} />;
+              })}
+            </span>
+          </Card>
+        </div>
       </div>
     </Panel>
   );
 }
 
-/** 目标与日志（J） */
+function CellPart({ id, state }: { id: ItemId; state: 'done' | 'have' | 'missing' }) {
+  return (
+    <span className={'k-cell' + (state === 'missing' ? ' dim' : '')} title={t('item.' + id)}>
+      <span className="k-box">
+        <Icon id={id} />
+        {state === 'done' && <img className="k-tick" src={iconURL('ui_check')} alt="" />}
+      </span>
+      <span className="k-num">{t(state === 'done' ? 'ui.installed' : state === 'have' ? 'ui.inPack' : 'ui.partMissing')}</span>
+    </span>
+  );
+}
+
+/** 日志（J）：日志是剧情文字，可以有强调色 */
 export function JournalPanel() {
   const g = useGame();
   const lines = g.log.slice(-60).reverse();
   return (
-    <Panel title={t('ui.journal')} wide>
+    <Panel title={t('ui.journal')} icon="ui_clock">
       <div className="logfull">
         {lines.map((l, i) => (
           <div key={i}>
@@ -192,31 +231,66 @@ export function JournalPanel() {
   );
 }
 
-const HELP = ['goal', 'controls', 'time', 'craft', 'bags'];
+const KEYS: [string, string][] = [
+  ['WASD', 'ui.keyMove'],
+  ['E', 'ui.keyUse'],
+  ['Tab', 'ui.keyPack'],
+  ['1–5', 'ui.keyHotbar'],
+  ['Q', 'ui.keyEat'],
+  ['J', 'ui.keyJournal'],
+  ['M', 'ui.keyMap'],
+  ['H', 'ui.keyHelp'],
+  ['Esc', 'ui.keyMenu'],
+  ['X', 'ui.keyFish'],
+  ['Z', 'ui.keyDrink'],
+  ['F', 'ui.keyCrate'],
+];
+const HELP = ['goal', 'time', 'craft', 'bags'];
 
-/** 帮助（H） */
+/** 帮助（H）：按键一页画成键帽，规则一页是文字（帮助本来就是给人读的） */
 export function HelpPanel() {
+  const [tab, setTab] = useState('keys');
   return (
-    <Panel title={t('ui.help')} wide>
-      {HELP.map((k) => (
-        <div key={k}>
-          <h3>{t('help.' + k + '.title')}</h3>
-          <p>
-            <Rich s={t('help2d.' + k)} />
-          </p>
+    <Panel
+      title={t('ui.help')}
+      icon="ui_eye"
+      tabs={[
+        { id: 'keys', label: t('ui.tabControls') },
+        { id: 'rules', label: t('ui.tabRules') },
+      ]}
+      tab={tab}
+      onTab={setTab}
+    >
+      {tab === 'keys' ? (
+        <div className="v-keys">
+          {KEYS.map(([k, label]) => (
+            <div key={k}>
+              <Key k={k} />
+              <span>{t(label)}</span>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : (
+        HELP.map((k) => (
+          <div key={k} className="v-help">
+            <h3>{t('help.' + k + '.title')}</h3>
+            <p>
+              <Rich s={t('help2d.' + k)} />
+            </p>
+          </div>
+        ))
+      )}
     </Panel>
   );
 }
 
-/** 菜单（Esc）：继续、设置、存档、回到欢迎页 */
+/** 菜单（Esc）：继续、存档、帮助、语言、回到欢迎页 */
 export function MenuPanel() {
   const store = useStore();
   const vs = useViewStore();
   const ui = useUi();
   return (
-    <Panel title={t('ui.menu')}>
+    <Panel title={t('ui.menu')} status={<span className="u-dim">{t('ui.paused')}</span>}>
       <div className="menu">
         <button className="u-btn" autoFocus onClick={() => vs.set({ panel: null })}>
           {t('ui.resume')}
@@ -251,7 +325,6 @@ export function MenuPanel() {
         >
           {t('ui.toWelcome')}
         </button>
-        <p className="u-dim">{t('ui.paused')}</p>
       </div>
     </Panel>
   );
@@ -288,3 +361,4 @@ export function PanelHost() {
       return null;
   }
 }
+
