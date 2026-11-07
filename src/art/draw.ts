@@ -3,6 +3,7 @@ import type { G } from './grid';
 import { ICONS } from './icons';
 import { DAY, type Pal } from './palette';
 import * as S from './sprites';
+import { MOD_SPRITES } from '../mod/registry';
 
 export const mkCanvas = (w: number, h: number): HTMLCanvasElement => {
   const c = document.createElement('canvas');
@@ -86,6 +87,8 @@ export function allSprites(): Record<string, G> {
   for (const id of Object.keys(S.CHARS))
     for (const dir of WALK_DIRS) for (let f = 0; f < 4; f++) out[`ch_${id}_${dir}_${f}`] = S.spChar(S.CHARS[id], dir, f);
   for (const k of Object.keys(ICONS)) out['ic_' + k] = ICONS[k];
+  // MOD 加的精灵（名字带 `<modId>:` 前缀，不会和内置的重名）
+  for (const [k, make] of Object.entries(MOD_SPRITES)) out[k] = make();
   return (sprites = out);
 }
 

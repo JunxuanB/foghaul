@@ -1,9 +1,8 @@
 // 换色后处理：场景按白天调色板画好以后，每个像素换回 0–11 号色，
-// 按当前时段（两行换色表之间用 4×4 Bayer 过渡）查表上色；灯光遮罩里读白天那一行。
+// 按当前时段的换色表上色（时段之间逐色换档，见 art/palette.ts 的 blendTable）；灯光遮罩里读白天那一行。
 import Phaser from 'phaser';
-import { BR, rgb, type PhaseMix } from '../../art/palette';
+import { BR, blendTable, rgb, type PhaseMix } from '../../art/palette';
 import { BAYER } from '../../art/noise';
-import { PHASES } from '../../config/visual';
 
 const frag = `
 precision mediump float;
@@ -11,9 +10,7 @@ uniform sampler2D uMainSampler;
 uniform sampler2D uMask;
 uniform vec3 uPal[12];
 uniform float uTA[12];
-uniform float uTB[12];
 uniform float uBayer[16];
-uniform float uLevel;
 uniform float uUseMask;
 uniform float uFade;
 varying vec2 outTexCoord;
@@ -37,10 +34,8 @@ void main() {
   float bi = p.y * 4.0 + p.x;
   float b = 0.0;
   for (int i = 0; i < 16; i++) if (abs(float(i) - bi) < 0.5) b = uBayer[i];
-  float ta = 0.0;
-  float tb = 0.0;
-  for (int i = 0; i < 12; i++) if (abs(float(i) - idx) < 0.5) { ta = uTA[i]; tb = uTB[i]; }
-  float outIdx = b < uLevel ? tb : ta;
+  float outIdx = 0.0;
+  for (int i = 0; i < 12; i++) if (abs(float(i) - idx) < 0.5) outIdx = uTA[i];
   if (uUseMask > 0.5) {
     float lit = texture2D(uMask, vec2(outTexCoord.x, 1.0 - outTexCoord.y)).a;
     if (lit > 0.5) outIdx = idx;
@@ -70,10 +65,8 @@ export class PalettePipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipel
 
   onPreRender(): void {
     this.set3fv('uPal', this.pal);
-    this.set1fv('uTA', PHASES[this.mix.a].t);
-    this.set1fv('uTB', PHASES[this.mix.b].t);
+    this.set1fv('uTA', blendTable(this.mix));
     this.set1fv('uBayer', this.bayer);
-    this.set1f('uLevel', Math.round(this.mix.m * 16));
     this.set1f('uUseMask', this.useMask && this.mask ? 1 : 0);
     this.set1f('uFade', this.fade);
     this.set1i('uMask', 1);

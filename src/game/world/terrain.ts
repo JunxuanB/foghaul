@@ -1,6 +1,6 @@
 // 把岛屿地形画成一张白天调色板的大图（地面、小路、农田、码头、草丛小花、贝壳）。
 // 浪花和水面闪光会动，另画（见 water.ts）。
-import { allSprites, mkCanvas, px, stamp } from '../../art/draw';
+import { mkCanvas, px } from '../../art/draw';
 import { hash, vn } from '../../art/noise';
 import { DAY, rgb, type Pal } from '../../art/palette';
 import { T, type Layout, type Raster } from '../../world/island';
@@ -134,24 +134,6 @@ export function paintTerrain(L: Layout, R: Raster, P: Pal = DAY): HTMLCanvasElem
     }
   }
 
-  // 农田空地的围栏
-  if (F) {
-    const post = allSprites().post;
-    const rail = (y: number) => {
-      px(ctx, P, 'w2', F.x0, y, F.x1 - F.x0, 1);
-      px(ctx, P, 'w0', F.x0, y + 1, F.x1 - F.x0, 1);
-    };
-    rail(F.y0 - 9);
-    rail(F.y0 - 5);
-    for (let x = F.x0; x <= F.x1; x += 10) stamp(ctx, post, x, F.y0, P);
-    for (let y = F.y0 + 10; y < F.y1; y += 10) {
-      stamp(ctx, post, F.x0, y, P);
-      stamp(ctx, post, F.x1, y, P);
-    }
-    rail(F.y1 - 7);
-    rail(F.y1 - 3);
-    for (let x = F.x0; x <= F.x1; x += 10) stamp(ctx, post, x, F.y1 + 2, P);
-  }
   return cv;
 }
 

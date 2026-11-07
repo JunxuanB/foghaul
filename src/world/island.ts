@@ -2,7 +2,8 @@
 // 画面层用 raster 画地形和做碰撞。同一个模板 + 种子结果永远一样。
 import { OBJ_DEFS, type ObjKind, type RelRect } from '../config/buildings';
 import { MAPS, type MapTemplate } from '../config/maps';
-import { fbm } from '../art/noise';
+import { fbm, hash } from '../art/noise';
+import { BALANCE } from '../config/balance';
 
 export const TILE = 16;
 
@@ -102,6 +103,46 @@ export function layout(id: string, seed: number): Layout {
   return out;
 }
 
+const spotCache = new Map<string, [number, number][]>();
+
+/**
+ * 某种采集点能长在哪些位置（底边中点）：在模板的区域里、草地上、离小路 / 农田 / 固定物体 / 出生点 / 码头够远。
+ * 纯函数、按种子缓存；具体今天长在哪几个位置由规则层用存档的随机数挑（sim/forage.ts）。
+ */
+export function forageSpots(id: string, seed: number, kind: 'tree' | 'herb'): [number, number][] {
+  const key = id + ':' + seed + ':' + kind;
+  const hit = spotCache.get(key);
+  if (hit) return hit;
+  const L = layout(id, seed);
+  const t = L.template;
+  const B = BALANCE.forage;
+  const out: [number, number][] = [];
+  const zones = t.forage[kind];
+  const sp = B.spacing[kind];
+  for (let y = B.grid; y < L.ph - B.grid; y += B.grid)
+    for (let x = B.grid; x < L.pw - B.grid; x += B.grid) {
+      // 网格点轻微错开，看起来不那么整齐
+      const jx = x + Math.round((hashXY(x, y, 1) - 0.5) * B.grid * 0.6);
+      const jy = y + Math.round((hashXY(x, y, 2) - 0.5) * B.grid * 0.6);
+      if (!zones.some((z) => Math.hypot(jx - z.cx, jy - z.cy) <= z.r)) continue;
+      // 树干下面要是结实的草地（离海岸够远）
+      if (heightAt(t, seed, jx, jy) < (kind === 'tree' ? 22 : 18)) continue;
+      let pd = Infinity;
+      for (const P of t.paths) for (let k = 0; k < P.length - 1; k++) pd = Math.min(pd, segDist(jx, jy, P[k][0], P[k][1], P[k + 1][0], P[k + 1][1]));
+      if (pd < t.pathWidth + B.keepClear.path) continue;
+      const F = t.field;
+      if (F && jx > F.x0 - 16 && jx < F.x1 + 16 && jy > F.y0 - 20 && jy < F.y1 + 16) continue;
+      if (Math.hypot(jx - L.spawn[0], jy - L.spawn[1]) < B.keepClear.spawn) continue;
+      if (L.dock && rectDist(jx, jy, L.dock) < B.keepClear.spawn) continue;
+      if (L.objects.some((o) => (o.foot ? rectDist(jx, jy, o.foot) : Math.hypot(o.x - jx, o.y - jy)) < sp)) continue;
+      out.push([jx, jy]);
+    }
+  spotCache.set(key, out);
+  return out;
+}
+
+const hashXY = (x: number, y: number, s: number) => hash(x, y, 300 + s);
+
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax;
   const dy = by - ay;
@@ -194,11 +235,12 @@ export function fenceRects(t: MapTemplate): Rect[] {
   const F = t.field;
   if (!F) return [];
   const w = F.x1 - F.x0;
+  // 上边：从下面那条横杆到桩脚都挡（人物从北边过来时站在围栏后面，被围栏挡住）
   return [
-    { x: F.x0 - 3, y: F.y0 - 5, w: w + 6, h: 6 },
-    { x: F.x0 - 3, y: F.y1 - 3, w: w + 6, h: 6 },
-    { x: F.x0 - 3, y: F.y0 - 5, w: 6, h: F.y1 - F.y0 + 8 },
-    { x: F.x1 - 3, y: F.y0 - 5, w: 6, h: F.y1 - F.y0 + 8 },
+    { x: F.x0 - 3, y: F.y0 - 6, w: w + 6, h: 7 },
+    { x: F.x0 - 3, y: F.y1 - 4, w: w + 6, h: 7 },
+    { x: F.x0 - 3, y: F.y0 - 6, w: 6, h: F.y1 - F.y0 + 9 },
+    { x: F.x1 - 3, y: F.y0 - 6, w: 6, h: F.y1 - F.y0 + 9 },
   ];
 }
 

@@ -2,6 +2,7 @@ import { ITEM_ORDER, type ItemId } from '../config/items';
 import type { Msg, Param } from '../sim/msg';
 import en from './en';
 import zh from './zh';
+import { MOD_STRINGS } from '../mod/registry';
 
 export type Lang = 'zh' | 'en';
 export const LANGS: Lang[] = ['zh', 'en'];
@@ -39,7 +40,7 @@ export function setLang(l: Lang, persist = true): void {
 }
 
 export function hasKey(k: string): boolean {
-  return k in DICTS[current] || k in zh;
+  return k in DICTS[current] || k in zh || k in MOD_STRINGS[current];
 }
 
 function sep(): string {
@@ -62,7 +63,7 @@ function renderParam(p: Param): string {
 /** 按当前语言渲染一个键 */
 export function t(k: string, params?: Record<string, Param>): string {
   if (!k) return '';
-  const tpl = DICTS[current][k] ?? zh[k as keyof typeof zh] ?? k;
+  const tpl = DICTS[current][k] ?? MOD_STRINGS[current][k] ?? zh[k as keyof typeof zh] ?? k;
   if (!params) return tpl;
   return tpl.replace(/\{(\w+)\}/g, (_, name: string) => (name in params ? renderParam(params[name]) : `{${name}}`));
 }

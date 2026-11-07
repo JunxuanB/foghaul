@@ -36,10 +36,17 @@ try {
   await page.keyboard.up('KeyW');
   const s1 = await st();
   if (!(s1.walk.y < y0)) throw new Error('人物没有走动');
-  // 站到树旁（只改位置，动作走真实按键和规则）
-  await page.evaluate(() => Object.assign(window.foghaul.state.walk, { x: 172, y: 240, facing: 'up' }));
-  await page.waitForTimeout(200);
-  for (let i = 0; i < 8; i++) {
+  // 树每天随机长：从存档里找一棵还能采的，站到旁边（只改位置，动作走真实按键和规则）
+  for (let guard = 0; guard < 20 && ((await st()).player.pack.wood ?? 0) < 8; guard++) {
+    const ok = await page.evaluate(() => {
+      const s = window.foghaul.state;
+      const t = s.forage.home.find((n) => n.kind === 'tree' && n.left > 0);
+      if (!t) return false;
+      Object.assign(s.walk, { x: t.x, y: t.y + 4, facing: 'up' });
+      return true;
+    });
+    if (!ok) throw new Error('岛上没有能采的树');
+    await page.waitForTimeout(200);
     await page.keyboard.press('KeyE');
     await page.waitForTimeout(1300);
   }

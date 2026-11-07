@@ -1,5 +1,7 @@
 import { SAVE_VERSION } from './save';
 import { layout } from '../world/island';
+import { initForage } from './forage';
+import { modIds } from '../mod/registry';
 import { BALANCE } from '../config/balance';
 import { NATIVE_NAME_COUNT, OPENING_LINES } from '../config/text';
 import { ISLANDS, VILLAGES, type VillageId } from '../config/world';
@@ -117,9 +119,11 @@ export function createGame(seed: number = newSeed()): GameState {
     walk: { island: 'home', x: 0, y: 0, facing: 'down', moved: 0 },
     guide: { step: 0, vitalsSeen: false },
     intros: [],
+    forage: {},
+    forageSeq: 1,
+    mods: modIds(),
     villages,
     flags: {
-      herbsLeft: BALANCE.home.herb.total,
       farm: new Array(BALANCE.home.farm.plots).fill(null),
       firstTraining: false,
       waterDispute: null,
@@ -150,6 +154,7 @@ export function createGame(seed: number = newSeed()): GameState {
   const L = layout('home', seed);
   state.walk.x = L.spawn[0];
   state.walk.y = L.spawn[1];
+  initForage(state);
   lightFrom(state, home);
   look(state);
   for (let i = 0; i < OPENING_LINES; i++) say(state, 'opening.' + i);

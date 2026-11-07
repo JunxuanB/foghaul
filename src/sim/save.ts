@@ -1,8 +1,9 @@
 import { BALANCE } from '../config/balance';
 import type { GameState } from './types';
+import { initForage } from './forage';
 
-/** 2D 版从 1 重新开始，不读文字版存档 */
-export const SAVE_VERSION = 1;
+/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点 */
+export const SAVE_VERSION = 2;
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -20,7 +21,18 @@ export function deserialize(text: string): GameState | null {
 }
 
 function migrate(s: GameState): GameState | null {
-  if (s.version === SAVE_VERSION && s.walk) return s;
+  if (!s.walk) return null;
+  // v1 → v2：草药从一个总数改成散在岛上的草药丛，树也改成每天刷新
+  if (s.version === 1) {
+    delete (s.flags as { herbsLeft?: number }).herbsLeft;
+    s.forage = {};
+    s.forageSeq = 1;
+    initForage(s);
+    s.version = 2;
+  }
+  // 早期的 v2 存档没有 MOD 列表
+  if (!Array.isArray(s.mods)) s.mods = [];
+  if (s.version === SAVE_VERSION) return s;
   return null;
 }
 

@@ -1,7 +1,7 @@
 // 岛上场景：人物走动、碰撞、镜头、选中面前的东西、按 E 互动、昼夜换色、灯光、雾。
 // 规则全部走 store.dispatch；这里只负责“看见什么、按了什么”。
 import Phaser from 'phaser';
-import { allSprites, px } from '../../art/draw';
+import { allSprites, mkCanvas, px } from '../../art/draw';
 import { hash } from '../../art/noise';
 import { DAY, phaseAt } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
@@ -10,11 +10,12 @@ import { ANIM, LIGHTS, VIEW } from '../../config/visual';
 import { minuteOfDay } from '../../sim/clock';
 import { currentGuide } from '../../sim/guide';
 import { carried, slotView } from '../../sim/inventory';
-import { interactInfo } from '../../sim/interact';
+import { interactInfo, objectsOn } from '../../sim/interact';
+import { nodesOn } from '../../sim/forage';
 import type { Command, Facing, GameState } from '../../sim/types';
 import { island } from '../../sim/util';
 import { PAUSING_PANELS, type Prompt } from '../../store/view';
-import { canStand, layout, raster, rectDist, type Layout, type Raster, type WorldObj } from '../../world/island';
+import { canStand, FEET, layout, raster, rectDist, type Layout, type Raster, type Rect, type WorldObj } from '../../world/island';
 import { CTX_KEY, type GameCtx } from '../context';
 import { moveDir, onAction, type Action } from '../input/keys';
 import { paintFog } from '../render/fog';
@@ -22,6 +23,7 @@ import { paintMask, type Beam, type Spot } from '../render/mask';
 import { PalettePipeline } from '../render/PalettePipeline';
 import { paintTerrain, waterFx } from '../world/terrain';
 import { Particles } from '../world/particles';
+import { fencePieces } from '../world/fence';
 
 type Img = Phaser.GameObjects.Image;
 
@@ -52,6 +54,12 @@ export class IslandScene extends Phaser.Scene {
   private isl = 'home';
   private player!: Img;
   private objImgs = new Map<string, Img>();
+  /** 这一帧岛上的全部物体（固定的 + 今天的树和草药），以及会挡路的采集点底座 */
+  private objs: WorldObj[] = [];
+  private blockers: Rect[] = [];
+  /** 篝火的火苗和亮着的窗：跟着物体按底边排序（不画在最上层，免得盖住站在前面的人物） */
+  private flames = new Map<string, { tex: Phaser.Textures.CanvasTexture; img: Img }>();
+  private glows = new Map<string, Img>();
   private hl!: Img;
   private arrow!: Img;
   private raft: Img | null = null;
@@ -111,11 +119,12 @@ export class IslandScene extends Phaser.Scene {
     this.fogImg = this.fog.context.createImageData(VIEW.w, VIEW.h);
     this.maskImg = this.mask.context.createImageData(VIEW.w, VIEW.h);
 
-    const S = allSprites();
-    for (const o of this.L.objects) {
-      if (!o.sprite || !S[o.sprite]) continue;
-      const img = this.add.image(o.x, o.y + 1, o.sprite).setOrigin(0.5, 1).setDepth(o.y);
-      this.objImgs.set(o.id, img);
+    this.syncObjects();
+    this.makeOverlays();
+    for (const [i, f] of fencePieces(this.L.template).entries()) {
+      const key = `fence_${this.isl}_${i}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, f.canvas);
+      this.add.image(f.x, f.y, key).setOrigin(0, 0).setDepth(f.depth);
     }
     this.hl = this.add.image(0, 0, 'ui_arrow').setOrigin(0.5, 1).setVisible(false);
     this.arrow = this.add.image(0, 0, 'ui_arrow').setOrigin(0.5, 1).setDepth(55000).setVisible(false);
@@ -170,7 +179,7 @@ export class IslandScene extends Phaser.Scene {
   private interact(): void {
     const f = this.ctx.view.s.focus;
     if (!f) return;
-    const o = this.L.objects.find((x) => x.id === f.id);
+    const o = this.objs.find((x) => x.id === f.id);
     if (!o) return;
     const info = interactInfo(this.state, o);
     if (!info || !info.ok) return;
@@ -260,7 +269,7 @@ export class IslandScene extends Phaser.Scene {
 
   private stopShake(): void {
     if (!this.shaking) return;
-    const o = this.L.objects.find((x) => this.objImgs.get(x.id) === this.shaking);
+    const o = this.objs.find((x) => this.objImgs.get(x.id) === this.shaking);
     if (o) this.shaking.setX(o.x);
     this.shaking = null;
   }
@@ -353,8 +362,8 @@ export class IslandScene extends Phaser.Scene {
   private stepAcc = 0;
 
   /**
-   * 按整像素走：斜着走时两个方向同时走 1 像素（花 √2 的距离），不会一格横一格竖地抖。
-   * 斜着走用左右的行走动画（和星露谷一样），不然看起来像在横着滑。
+   * 按整像素走，每帧走整数步：60 帧的屏幕上每帧正好 1 像素，画面不会一顿一顿的。
+   * 斜着走时两个方向每帧各走 1 像素（和星露谷一样，斜走略快），用左右的行走动画。
    */
   private walk(dt: number): void {
     const s = this.state;
@@ -372,20 +381,21 @@ export class IslandScene extends Phaser.Scene {
     }
     if (sx !== 0) w.facing = sx > 0 ? 'right' : 'left';
     else w.facing = sy > 0 ? 'down' : 'up';
-    this.stepAcc += BALANCE.interact.walkSpeed * dt;
+    // 帧间隔在 60 帧附近抖动时按标准帧算，保证每帧步数一样
+    const frame = Math.abs(dt - 1 / 60) < 0.006 ? 1 / 60 : dt;
+    this.stepAcc += BALANCE.interact.walkSpeed * frame;
     let moved = 0;
     while (this.stepAcc >= 1) {
-      const okX = sx !== 0 && canStand(this.R, w.x + sx, w.y);
+      const okX = sx !== 0 && this.canWalk(w.x + sx, w.y);
       if (okX) w.x += sx;
-      const okY = sy !== 0 && canStand(this.R, w.x, w.y + sy);
+      const okY = sy !== 0 && this.canWalk(w.x, w.y + sy);
       if (okY) w.y += sy;
       if (!okX && !okY) {
         this.stepAcc = 0;
         break;
       }
-      const cost = okX && okY ? Math.SQRT2 : 1;
-      this.stepAcc -= cost;
-      moved += cost;
+      this.stepAcc -= 1;
+      moved += okX && okY ? Math.SQRT2 : 1;
     }
     w.moved += moved;
     if (moved === 0 && this.stepAcc === 0) this.moving = false;
@@ -427,7 +437,7 @@ export class IslandScene extends Phaser.Scene {
     let best: WorldObj | null = null;
     let bs = Infinity;
     if (!v.s.panel) {
-      for (const o of this.L.objects) {
+      for (const o of this.objs) {
         if (!o.hit || o.kind === 'decor') continue;
         if (rectDist(w.x, w.y - 1, o.hit) > reach) continue;
         const sc = rectDist(probe.x, probe.y, o.hit);
@@ -479,7 +489,7 @@ export class IslandScene extends Phaser.Scene {
     }
     if (v.s.panel || this.pending) return;
     const w = s.walk;
-    for (const o of this.L.objects) {
+    for (const o of this.objs) {
       if (!o.hit || o.kind === 'decor' || s.intros.includes(o.kind)) continue;
       if (rectDist(w.x, w.y - 1, o.hit) > BALANCE.interact.introRange) continue;
       this.ctx.store.dispatch({ t: 'seeIntro', kind: o.kind });
@@ -492,7 +502,7 @@ export class IslandScene extends Phaser.Scene {
     const w = this.state.walk;
     let best: WorldObj | null = null;
     let bd = Infinity;
-    for (const o of this.L.objects) {
+    for (const o of this.objs) {
       if (o.kind !== kind) continue;
       const d = Math.hypot(o.x - w.x, o.y - w.y);
       if (d < bd) {
@@ -550,20 +560,97 @@ export class IslandScene extends Phaser.Scene {
     }
   }
 
-  /** 状态决定的外观：草药丛采完、木筏造好 */
+  /** 物体和存档同步：今天的树和草药（长出、采完变树桩、第二天清掉）、木筏 */
+  private syncObjects(): void {
+    const s = this.state;
+    this.objs = objectsOn(s, this.isl);
+    this.blockers = this.objs.filter((o) => o.foot && nodesOn(s, this.isl).some((n) => n.id === o.id)).map((o) => o.foot!);
+    const S = allSprites();
+    const seen = new Set<string>();
+    for (const o of this.objs) {
+      if (!o.sprite || !S[o.sprite]) continue;
+      seen.add(o.id);
+      let img = this.objImgs.get(o.id);
+      if (!img) {
+        img = this.add.image(o.x, o.y + 1, o.sprite).setOrigin(0.5, 1).setDepth(o.y);
+        this.objImgs.set(o.id, img);
+      } else if (img.texture.key !== o.sprite) img.setTexture(o.sprite);
+    }
+    for (const [id, img] of this.objImgs) {
+      if (seen.has(id)) continue;
+      if (this.shaking === img) this.shaking = null;
+      img.destroy();
+      this.objImgs.delete(id);
+    }
+  }
+
   private updateObjects(): void {
     const s = this.state;
-    for (const o of this.L.objects) {
-      if (o.kind !== 'herb') continue;
-      const img = this.objImgs.get(o.id);
-      const want = s.flags.herbsLeft > 0 ? 'herb' : 'herbEmpty';
-      if (img && img.texture.key !== want) img.setTexture(want);
-    }
+    this.syncObjects();
     if (s.player.hasRaft && this.L.raftAt && !this.raft) {
       this.raft = this.add.image(this.L.raftAt[0], this.L.raftAt[1], 'raft').setOrigin(0.5, 1).setDepth(this.L.raftAt[1] - 40);
     }
     if (this.raft && this.L.raftAt) this.raft.setY(this.L.raftAt[1] + Math.round(Math.sin(this.t * 1.8) * 1.1));
     if (this.raft) this.raft.setVisible(s.player.hasRaft);
+  }
+
+  /** 篝火火苗（每帧重画的小画布）和小屋亮着的窗（固定的一张图），深度紧贴在物体上面 */
+  private makeOverlays(): void {
+    const S = allSprites();
+    for (const o of this.L.objects) {
+      const g = S[o.sprite];
+      if (!g) continue;
+      const ox = o.x - (g.w >> 1);
+      const oy = o.y - g.h + 1;
+      if (o.sprite === 'fire') {
+        const key = 'flame_' + this.isl + '_' + o.id;
+        const tex = this.textures.exists(key) ? (this.textures.get(key) as Phaser.Textures.CanvasTexture) : this.textures.createCanvas(key, 9, 9)!;
+        const [fx, fy] = g.meta.flame as [number, number];
+        const img = this.add.image(ox + fx - 4, oy + fy - 8, key).setOrigin(0, 0).setDepth(o.y + 0.1);
+        this.flames.set(o.id, { tex, img });
+      } else if (o.sprite === 'house') {
+        const key = 'glow_' + o.sprite;
+        if (!this.textures.exists(key)) {
+          const cv = mkCanvas(g.w, g.h);
+          const c = cv.getContext('2d')!;
+          for (const [x, y, w, h] of g.meta.win as [number, number, number, number][]) {
+            px(c, DAY, 'y0', x, y, w, h);
+            px(c, DAY, 'y1', x + 2, y + 2, w - 4, h - 4);
+            px(c, DAY, 'w0', x + 7, y, 1, h);
+            px(c, DAY, 'w0', x, y + 5, w, 1);
+          }
+          this.textures.addCanvas(key, cv);
+        }
+        this.glows.set(o.id, this.add.image(ox, oy, key).setOrigin(0, 0).setDepth(o.y + 0.1).setVisible(false));
+      }
+    }
+  }
+
+  /** 篝火火苗：(wx, wy) 为火苗底部的世界坐标，k 为帧号 */
+  private drawFlame(id: string, wx: number, wy: number, k: number): void {
+    const f = this.flames.get(id);
+    if (!f) return;
+    const c = f.tex.context;
+    c.clearRect(0, 0, 9, 9);
+    const bx = wx - f.img.x;
+    const by = wy - f.img.y;
+    for (let dy = 0; dy < 8; dy++) {
+      const w = [3, 3, 3, 2, 2, 1, 1, 0][dy];
+      for (let dx = -w; dx <= w; dx++) {
+        const r = hash(dx * 7 + dy, k, 77);
+        if (dy > 3 && r < 0.3) continue;
+        px(c, DAY, (Math.abs(dx) < w && dy < 5) || r > 0.8 ? 'f1' : 'f0', bx + dx, by - dy);
+      }
+    }
+    f.tex.refresh();
+  }
+
+  /** 人物脚底中点能不能站在 (x, y)：地形 + 固定物体（Raster）+ 今天的采集点 */
+  private canWalk(x: number, y: number): boolean {
+    if (!canStand(this.R, x, y)) return false;
+    const fx = x + FEET.x;
+    const fy = y + FEET.y;
+    return !this.blockers.some((b) => fx < b.x + b.w && fx + FEET.w > b.x && fy < b.y + b.h && fy + FEET.h > b.y);
   }
 
   // ---------------------------------------------------------------- 画面特效（屏幕坐标）
@@ -650,14 +737,7 @@ export class IslandScene extends Phaser.Scene {
         const [fx0, fy0] = g.meta.flame as [number, number];
         const fx = ox + fx0;
         const fy = oy + fy0;
-        for (let dy = 0; dy < 8; dy++) {
-          const w = [3, 3, 3, 2, 2, 1, 1, 0][dy];
-          for (let dx = -w; dx <= w; dx++) {
-            const r = hash(dx * 7 + dy, k, 77);
-            if (dy > 3 && r < 0.3) continue;
-            px(c, P, (Math.abs(dx) < w && dy < 5) || r > 0.8 ? 'f1' : 'f0', fx + dx, fy - dy);
-          }
-        }
+        this.drawFlame(o.id, fx + cx, fy + cy, k);
         spots.push([fx, fy, (LIGHTS.fire + Math.round(Math.sin(t * 9) * LIGHTS.fireFlicker)) * strength]);
       } else if (o.sprite === 'house') {
         const [chx, chy] = g.meta.chim as [number, number];
@@ -670,13 +750,7 @@ export class IslandScene extends Phaser.Scene {
           px(c, P, 'smoke', x, y, sz, sz);
         }
         const wins = g.meta.win as [number, number, number, number][];
-        if (strength > LIGHTS.windowGlowFrom)
-          for (const [x, y, w, h] of wins) {
-            px(c, P, 'y0', ox + x, oy + y, w, h);
-            px(c, P, 'y1', ox + x + 2, oy + y + 2, w - 4, h - 4);
-            px(c, P, 'w0', ox + x + 7, oy + y, 1, h);
-            px(c, P, 'w0', ox + x, oy + y + 5, w, 1);
-          }
+        this.glows.get(o.id)?.setVisible(strength > LIGHTS.windowGlowFrom);
         for (const [x, y, w, h] of wins) spots.push([ox + x + w / 2, oy + y + h / 2, LIGHTS.window * strength]);
         const [lx, ly] = g.meta.lantern as [number, number];
         spots.push([ox + lx, oy + ly, LIGHTS.doorLamp * strength]);

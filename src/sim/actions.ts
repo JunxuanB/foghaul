@@ -24,7 +24,7 @@ import {
 import { canEnter, lightCircle, lightCorridor, look } from './map';
 import { checkReveals, lightFrom } from './reveal';
 import { updateUnlocks } from './tutorial';
-import { placeAtDock, positionError } from './interact';
+import { mapHere, nearNode, placeAtDock, positionError } from './interact';
 import { fail, OK, say } from './log';
 import { islandM, itemM, m, recipeM, roleM, stockP, type Msg } from './msg';
 import { headcountOf, isHungry, presentPeople, sameJob, teachableJobs } from './people';
@@ -153,12 +153,18 @@ function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'
   const lumber = state.people.find((x) => x.role === 'lumberjack')?.active;
   // 采集到的东西默认放进背包，满了放货舱，再满了放主岛仓库
   const give = (item: ItemId, n: number) => n - giveToPlayer(state, item, n, 'pack');
+  // 2D：采的是人物身边那一棵树 / 那一丛草药，采几次就采完（没有地图的岛不会走到这里）
+  const node = mapHere(state) ? nearNode(state, what === 'herb' ? 'herb' : 'tree') : null;
+  if (mapHere(state) && (what === 'branch' || what === 'chop' || what === 'herb') && !node) return fail(what === 'herb' ? 'err.noHerbs' : 'err.noTree');
   if (what === 'branch' || what === 'chop') {
     const chop = what === 'chop';
     if (chop && !lumber) return fail('err.needLumberjack');
     const g = chop ? H.chop : H.branch;
-    const k = give('wood', g.wood);
+    const want = node ? Math.min(g.wood, node.left) : g.wood;
+    const k = give('wood', want);
+    if (node) node.left -= k;
     say(state, k ? (chop ? 'log.chop' : 'log.branch') : 'log.stockFull', { n: k, item: itemM('wood') });
+    if (node && node.left <= 0) say(state, 'log.treeDown');
     advance(state, g.minutes);
   } else if (what === 'shoreFish') {
     if (chance(state, H.shoreFish.chance)) {
@@ -167,10 +173,10 @@ function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'
     } else say(state, 'log.shoreFishMiss');
     advance(state, H.shoreFish.minutes);
   } else {
-    if (state.flags.herbsLeft <= 0) return fail('err.noHerbs');
     const k = give('herb', 1);
-    if (k) state.flags.herbsLeft--;
-    say(state, 'log.herb', { left: state.flags.herbsLeft });
+    if (node) node.left -= k;
+    say(state, k ? 'log.herbPick' : 'log.stockFull', { item: itemM('herb') });
+    if (node && node.left <= 0) say(state, 'log.herbDone');
     advance(state, H.herb.minutes);
   }
   return OK;

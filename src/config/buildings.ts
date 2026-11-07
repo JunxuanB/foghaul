@@ -53,6 +53,7 @@ export const OBJ_DEFS: Record<string, ObjDef> = {
   palm: { kind: 'decor', foot: { x: -3, y: -4, w: 8, h: 4 } },
   net: { kind: 'decor', foot: { x: -18, y: -3, w: 36, h: 3 } },
   stump: { kind: 'decor', foot: { x: -6, y: -5, w: 12, h: 5 } },
+  herbEmpty: { kind: 'decor' },
 };
 
 /** 每种互动对象的“初见介绍”和按键提示文字键：intro.<kind>、act.<kind> */

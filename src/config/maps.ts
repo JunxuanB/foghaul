@@ -20,8 +20,13 @@ export interface MapTemplate {
   shoal?: { x: number; y: number; out: number };
   /** 出生点（坠机残骸旁） */
   spawn: [number, number];
-  /** 物体：[精灵名, x, y] */
+  /** 固定的物体：[精灵名, x, y]。树和草药不在这里，它们每天随机刷新（见 forage） */
   objects: [string, number, number][];
+  /**
+   * 可刷新的采集点：在这些圆形区域里的草地上随机长出来（具体位置用存档的随机数挑）。
+   * 数量、每天长几棵、每棵能采几次在 BALANCE.forage。
+   */
+  forage: Record<'tree' | 'herb', { cx: number; cy: number; r: number }[]>;
   /** 外圈的雾：离中心的椭圆距离从 a 到 b 渐浓 */
   fog: [number, number];
 }
@@ -45,19 +50,32 @@ export const MAPS: Record<string, MapTemplate> = {
     shoal: { x: 470, y: 520, out: 15 },
     spawn: [384, 424],
     objects: [
-      // 树林（西边）
-      ['tree', 112, 196], ['tree2', 156, 150], ['tree', 96, 262], ['stree', 146, 296], ['tree2', 190, 300], ['stree', 172, 228],
-      ['tree', 220, 120], ['stree', 120, 136], ['tree2', 150, 352], ['stree', 230, 380], ['tree', 600, 120], ['stree', 650, 300],
       // 小屋、工作台、储物箱
       ['house', 330, 190], ['workbench', 424, 214], ['chest', 262, 204],
       // 灯塔、残骸
       ['light', 702, 200], ['wreck', 300, 444],
-      // 草药丛、农田木牌
-      ['herb', 520, 112], ['sign', 476, 340],
+      // 农田木牌
+      ['sign', 476, 340],
       // 装饰
       ['fire', 402, 284], ['woodpile', 470, 206], ['barrel', 610, 410], ['crate', 556, 404], ['net', 640, 380],
       ['bush', 250, 300], ['bush', 640, 250], ['bush', 520, 410], ['bush', 90, 330], ['palm', 720, 330], ['palm', 130, 420], ['rock', 750, 260], ['boulder', 220, 430], ['rock', 680, 130], ['stump', 196, 196], ['rock', 360, 120],
     ],
+    forage: {
+      // 树：西边的树林为主，北边和东边各一小片
+      tree: [
+        { cx: 160, cy: 250, r: 130 },
+        { cx: 590, cy: 120, r: 80 },
+        { cx: 660, cy: 300, r: 50 },
+      ],
+      // 草药：散在岛上各处
+      herb: [
+        { cx: 520, cy: 120, r: 60 },
+        { cx: 250, cy: 330, r: 70 },
+        { cx: 690, cy: 260, r: 50 },
+        { cx: 130, cy: 160, r: 60 },
+        { cx: 420, cy: 360, r: 50 },
+      ],
+    },
     fog: [1.12, 1.42],
   },
 };

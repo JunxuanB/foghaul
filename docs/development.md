@@ -16,7 +16,7 @@
 | `npm run build` | 类型检查 + 打包到 `dist/` |
 | `npm run deploy` | 打包并用 Wrangler 发布到 Cloudflare |
 
-提交前至少跑 `npm test` 和 `npm run build`。
+提交前至少跑 `npm test` 和 `npm run build`。2D 版的实现方式写在 `docs/2d-tech.md`，改代码时同一个提交里更新它。
 
 ## 测试
 
@@ -27,8 +27,9 @@
 | `tests/i18n.test.ts` | 两个词典键一致、占位符一致；源码里字面量键都存在 |
 | `tests/realistic.test.ts` | **不作弊**的开局试玩：4 个种子，按普通玩家的思路（饿了吃、渴了喝、天黑回家睡）从造木筏玩到救出伐木工并修好第二座灯塔，要求不死、第 4 天前完成。用来检查开局数值 |
 | `tests/playthrough.test.ts` | 用脚本玩家在 4 个种子上从新游戏打到汇报工作，并检查每步对应的目标已完成、全部日志可渲染 |
-| `tests/island2d.test.ts` | 2D 主岛地图：同一种子结果一致；每个互动对象从出生点都走得到；码头外端在水里 |
-| `tests/guide2d.test.ts` | 2D 规则：出生点不在树和工作台旁；第一天脚本按顺序推进、已满足的步跳过、晚上插“回小屋睡觉”；每种互动对象都有名字、介绍和提示；新存档格式；海上不能制作 |
+| `tests/island2d.test.ts` | 2D 主岛地图：同一种子结果一致；每个互动对象、每个可以长树 / 草药的位置从出生点都走得到；码头外端在水里 |
+| `tests/guide2d.test.ts` | 2D 规则：出生点不在树和工作台旁；第一天脚本按顺序推进、已满足的步跳过、晚上插“回小屋睡觉”；每种互动对象都有名字、介绍和提示；背包格子和堆叠；树和草药随机长、采完变树桩、每天早上刷新；v1 存档迁移；海上不能制作 |
+| `tests/mods.test.ts` | MOD 注册表：命名空间、全加或不加、文字双语、新存档记录 MOD |
 | `tests/smoke/smoke.mjs` | 冒烟测试（不在 `npm test` 里，用 `npm run test:smoke`） |
 | `tests/helpers.ts` | `must`、`sailTo`、`homeGather`、`keepAlive` 等测试工具。`must` / `act` 会先用 `approach()` 把人物“瞬移”到命令需要的物体旁边（2D 的位置校验） |
 

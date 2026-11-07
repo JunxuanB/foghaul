@@ -77,6 +77,22 @@ export function phaseAt(min: number): PhaseMix {
   return { a: ph, b: ph, m: 0, s: PHASES[ph].s };
 }
 
+/**
+ * 两个时段之间的换色表：每个颜色按自己的色阶一档一档地变，全屏一起变（不用点阵混合，
+ * 否则画面看起来像叠了一层网格、分辨率变低）。冷色阶 0–7、暖色阶 8–11 各走各的；
+ * 跨色阶的（比如傍晚月白变灯芯）在过渡一半时直接换。
+ */
+export function blendTable(mix: PhaseMix): number[] {
+  const A = PHASES[mix.a].t;
+  const B = PHASES[mix.b].t;
+  if (mix.m <= 0 || mix.a === mix.b) return A.slice();
+  return A.map((a, i) => {
+    const b = B[i];
+    if (a < 8 === b < 8) return Math.round(a + (b - a) * mix.m);
+    return mix.m < 0.5 ? a : b;
+  });
+}
+
 export const rgb = (h: string): [number, number, number] => {
   const n = parseInt(h.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];

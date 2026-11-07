@@ -4,10 +4,12 @@ import { BALANCE } from '../config/balance';
 import type { ObjKind } from '../config/buildings';
 import { MAPS } from '../config/maps';
 import { layout, rectDist, type WorldObj } from '../world/island';
+import { OBJ_DEFS, type RelRect } from '../config/buildings';
+import { nodesOn } from './forage';
 import { canSleepNow } from './clock';
 import { m, type Msg } from './msg';
 import { roleOf } from './people';
-import type { Command, GameState, Walk } from './types';
+import type { Command, ForageNode, GameState, Walk } from './types';
 
 /** 当前所在岛有 2D 地图，并且人物在这张图上 */
 export function mapHere(state: GameState): string | null {
@@ -16,9 +18,19 @@ export function mapHere(state: GameState): string | null {
   return at;
 }
 
+/** 采集点变成地图上的物体：采完的树变成树桩、草药丛变成空丛（都只是装饰） */
+export function nodeObject(n: ForageNode): WorldObj {
+  const done = n.left <= 0;
+  const sprite = done ? (n.kind === 'tree' ? 'stump' : 'herbEmpty') : n.sprite;
+  const def = OBJ_DEFS[sprite];
+  const rel = (r: RelRect | undefined) => (r ? { x: n.x + r.x, y: n.y + r.y, w: r.w, h: r.h } : null);
+  return { id: n.id, kind: done ? 'decor' : n.kind, sprite, x: n.x, y: n.y, foot: rel(def?.foot), hit: rel(def?.hit ?? def?.foot) };
+}
+
+/** 一座岛上的全部物体：模板里固定的 + 今天的采集点 */
 export function objectsOn(state: GameState, islandId: string): WorldObj[] {
   if (!MAPS[islandId]) return [];
-  return layout(islandId, state.seed).objects;
+  return [...layout(islandId, state.seed).objects, ...nodesOn(state, islandId).map(nodeObject)];
 }
 
 export function objectById(state: GameState, islandId: string, id: string): WorldObj | undefined {
@@ -108,6 +120,18 @@ export function placeAtBed(state: GameState, islandId: string): void {
   state.walk = { ...state.walk, island: islandId, x: bed.hit.x + bed.hit.w / 2, y: bed.hit.y + bed.hit.h + 6, facing: 'down' };
 }
 
+function nodeLeft(state: GameState, id: string): number {
+  for (const list of Object.values(state.forage)) for (const n of list) if (n.id === id) return n.left;
+  return 0;
+}
+
+/** 人物身边、可以采的那个采集点（规则层用来决定采哪一个） */
+export function nearNode(state: GameState, kind: ForageNode['kind']): ForageNode | null {
+  const o = nearKind(state, kind);
+  if (!o) return null;
+  return nodesOn(state, mapHere(state)!).find((n) => n.id === o.id && n.left > 0) ?? null;
+}
+
 // ---------------------------------------------------------------- 按键提示
 
 export interface InteractInfo {
@@ -123,13 +147,11 @@ export function interactInfo(state: GameState, o: WorldObj): InteractInfo | null
   const farmer = !!roleOf(state, 'farmer')?.active;
   switch (o.kind) {
     case 'tree':
-      return { label: m(lumber ? 'act.chop' : 'act.branch'), ok: true };
+      return { label: m(lumber ? 'act.chop' : 'act.branch', { n: nodeLeft(state, o.id) }), ok: true };
     case 'shoal':
       return { label: m('act.shoreFish'), ok: true };
     case 'herb':
-      return state.flags.herbsLeft > 0
-        ? { label: m('act.herb', { n: state.flags.herbsLeft }), ok: true }
-        : { label: m('act.herbDone'), ok: false, reason: m('reason.herbsGone') };
+      return { label: m('act.herb', { n: nodeLeft(state, o.id) }), ok: true };
     case 'workbench':
       return { label: m('act.workbench'), ok: true };
     case 'chest':

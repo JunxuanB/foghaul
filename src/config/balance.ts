@@ -87,12 +87,26 @@ export const BALANCE = {
     branch: { minutes: 20, wood: 1 },
     chop: { minutes: 30, wood: 3 }, // 伐木工获救后
     shoreFish: { minutes: 30, chance: 0.6 },
-    herb: { minutes: 15, total: 5 },
+    herb: { minutes: 15 },
     farm: { plots: 3, plantMinutes: 15, growMinutes: 24 * 60, yield: 6 },
     /** 主岛仓库上限（每种物品） */
     stockCap: 99,
     /** 货舱加固：每次 +10，最多到 60 */
     holdUpgrade: { woodCosts: [20, 35, 50], step: 6 },
+  },
+
+  // ---------------- 2D：可刷新的采集点（只影响玩家手动采集，岛上的设施生产不受影响） ----------------
+  forage: {
+    /** 树：开局几棵、每天早上新长几棵、最多几棵；每棵能出几根木头（随机，含两端） */
+    tree: { start: 10, perDay: 4, max: 14, yield: [3, 5] as [number, number], sprites: ['tree', 'tree2', 'stree'] },
+    /** 草药丛：每丛能采几份 */
+    herb: { start: 4, perDay: 2, max: 6, yield: [1, 2] as [number, number], sprites: ['herb'] },
+    /** 采集点之间、离固定物体至少隔多远（像素） */
+    spacing: { tree: 28, herb: 16 },
+    /** 候选位置的网格间距（像素） */
+    grid: 12,
+    /** 离出生点、码头、小路至少多远（像素） */
+    keepClear: { spawn: 28, path: 9 },
   },
 
   // ---------------- 背包与货舱 ----------------
@@ -230,8 +244,8 @@ export const BALANCE = {
     slack: 8,
     /** “走出 3 格”：引导第 1 步 */
     walkTilesForGoal: 3,
-    /** 走路速度（像素/秒） */
-    walkSpeed: 64,
+    /** 走路速度（像素/秒）。60 帧时每帧正好 1 像素，画面最顺 */
+    walkSpeed: 60,
     /** 初见介绍：离物体多近时出现（像素） */
     introRange: 40,
   },

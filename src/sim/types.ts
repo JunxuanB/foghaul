@@ -150,6 +150,18 @@ export interface PlayerState {
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
 
+export type ForageKind = 'tree' | 'herb';
+
+/** 2D：可刷新的采集点（树、草药丛）。left 为还能采几次（树按木头根数），0 表示采完（树桩 / 空草丛，第二天早上清掉） */
+export interface ForageNode {
+  id: string;
+  kind: ForageKind;
+  sprite: string;
+  x: number;
+  y: number;
+  left: number;
+}
+
 /** 2D：人物在岛上的位置（像素，脚底中点）。画面层每帧写回，规则只在动作发生时读 */
 export interface Walk {
   island: string;
@@ -196,9 +208,14 @@ export interface GameState {
   guide: { step: number; vitalsSeen: boolean };
   /** 2D：已经出现过“初见介绍”的物体种类 */
   intros: string[];
+  /** 2D：每座岛上可刷新的采集点 */
+  forage: Record<string, ForageNode[]>;
+  /** 采集点编号 */
+  forageSeq: number;
+  /** 开这一局时加载的 MOD（`id@版本`），以后读档时用来检查 */
+  mods: string[];
   villages: Record<VillageId, VillageState>;
   flags: {
-    herbsLeft: number;
     farm: (number | null)[];
     firstTraining: boolean;
     waterDispute: 'pending' | 'done' | null;

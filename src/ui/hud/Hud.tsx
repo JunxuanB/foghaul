@@ -1,11 +1,10 @@
 // HUD 四角（docs/2d-design.md 第 9 节）：左上地名、时间、生存值；右上当前目标；左下日志；下中快捷栏。
 // 元素按 has() 逐步出现，出现时闪两下。
 import { useEffect, useRef, useState } from 'react';
-import { BR, phaseAt } from '../../art/palette';
+import { BR, blendTable, phaseAt } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEMS } from '../../config/items';
 import { slotView } from '../../sim/inventory';
-import { PHASES } from '../../config/visual';
 import { t, tm } from '../../i18n';
 import { dayOf, minuteOfDay } from '../../sim/clock';
 import { currentGuide } from '../../sim/guide';
@@ -178,13 +177,13 @@ function usePhaseColors(ref: React.RefObject<HTMLDivElement>) {
   const g = useGame();
   const v = useView();
   const min = v.debugMinute ?? minuteOfDay(g.time);
-  const ph = phaseAt(min);
-  const key = ph.m < 0.5 ? ph.a : ph.b;
+  const table = blendTable(phaseAt(min)).join(',');
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    for (const i of [0, 5, 6, 7, 10, 11]) el.style.setProperty('--w' + i, BR[PHASES[key].t[i]]);
-  }, [key, ref]);
+    const t = table.split(',').map(Number);
+    for (const i of [0, 5, 6, 7, 10, 11]) el.style.setProperty('--w' + i, BR[t[i]]);
+  }, [table, ref]);
 }
 
 export function Hud() {

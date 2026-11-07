@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FEET, canStand, layout, raster, rectDist, T, TILE } from '../src/world/island';
+import { FEET, canStand, forageSpots, layout, raster, rectDist, T, TILE } from '../src/world/island';
+import { OBJ_DEFS } from '../src/config/buildings';
 import { BALANCE } from '../src/config/balance';
 
 /** 从出生点按 2 像素一步做洪水填充，返回能站到的点 */
@@ -51,6 +52,21 @@ describe('home island map', () => {
           if (rectDist(x, y + FEET.y / 2, o.hit) <= reach) ok = true;
         }
         expect(ok, `${o.id} reachable`).toBe(true);
+      }
+      // 每个可以长树 / 草药的位置都走得到（采集点的互动范围在可达的格子旁边）
+      for (const kind of ['tree', 'herb'] as const) {
+        const list = forageSpots('home', seed, kind);
+        expect(list.length, kind + ' spots').toBeGreaterThan(kind === 'tree' ? 30 : 15);
+        const hit = OBJ_DEFS[kind === 'tree' ? 'tree' : 'herb'].hit!;
+        for (const [x, y] of list) {
+          const r = { x: x + hit.x, y: y + hit.y, w: hit.w, h: hit.h };
+          let ok = false;
+          for (let i = 0; i < seen.length && !ok; i++) {
+            if (!seen[i]) continue;
+            if (rectDist((i % W) * S + 1, ((i / W) | 0) * S + 1 + FEET.y / 2, r) <= reach) ok = true;
+          }
+          expect(ok, `${kind} spot ${x},${y} reachable`).toBe(true);
+        }
       }
       // 码头的外端在水里
       const d = L.dock!;

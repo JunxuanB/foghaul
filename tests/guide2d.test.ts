@@ -81,6 +81,47 @@ describe('2D rules', () => {
     expect(s.islands.find((x) => x.id === 'home')!.stock.wood).toBe(1);
   });
 
+  it('trees and herbs grow at random, run out when picked and regrow every morning', async () => {
+    const { BALANCE } = await import('../src/config/balance');
+    const { nodesOn } = await import('../src/sim/forage');
+    const s = createGame(21);
+    const F = BALANCE.forage;
+    const trees = () => nodesOn(s, 'home').filter((n) => n.kind === 'tree' && n.left > 0);
+    const herbs = () => nodesOn(s, 'home').filter((n) => n.kind === 'herb' && n.left > 0);
+    expect(trees().length).toBe(F.tree.start);
+    expect(herbs().length).toBe(F.herb.start);
+    // 同一种子长在同样的位置
+    expect(nodesOn(createGame(21), 'home')).toEqual(nodesOn(s, 'home'));
+    // 掰光一棵树：它变成树桩，不能再采
+    const t0 = trees()[0];
+    s.walk.x = t0.x;
+    s.walk.y = t0.y + 2;
+    const left = t0.left;
+    for (let i = 0; i < left; i++) must(s, { t: 'gather', what: 'branch' });
+    expect(t0.left).toBe(0);
+    expect(s.player.pack.wood).toBe(left);
+    expect(trees().length).toBe(F.tree.start - 1);
+    expect(dispatch(s, { t: 'gather', what: 'branch' }).ok).toBe(false);
+    // 第二天早上：树桩清掉，新长出几棵（不超过上限）
+    advance(s, 1440 - (s.time % 1440) + BALANCE.time.dayStart + 1);
+    expect(nodesOn(s, 'home').some((n) => n.id === t0.id)).toBe(false);
+    expect(trees().length).toBe(Math.min(F.tree.max, F.tree.start - 1 + F.tree.perDay));
+    // 采集点之间不挤在一起
+    const all = nodesOn(s, 'home');
+    for (const a of all) for (const b of all) if (a !== b) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(F.spacing.herb);
+  });
+
+  it('migrates a v1 save: herbs and trees become forage nodes', async () => {
+    const s = createGame(8) as unknown as Record<string, unknown> & { flags: Record<string, unknown> };
+    s.version = 1;
+    delete s.forage;
+    s.flags.herbsLeft = 3;
+    const back = deserialize(JSON.stringify(s))!;
+    expect(back.version).toBe(SAVE_VERSION);
+    expect(back.forage.home.length).toBeGreaterThan(0);
+    expect('herbsLeft' in back.flags).toBe(false);
+  });
+
   it('saves with the 2D format and refuses other versions', () => {
     const s = createGame(11);
     s.walk.x = 123;
