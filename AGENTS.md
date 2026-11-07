@@ -2,6 +2,13 @@
 
 给接手本项目的 AI 和开发者的入口说明。先读这里，再按需读 `docs/`。
 
+## 现在的方向：2D 版（先读这里）
+
+项目正在从文字版改成 2D 游戏。**接手 2D 工作前先完整读 [docs/2d-design.md](docs/2d-design.md)**：原则（一个建筑一个功能、引导充足、不乱）、操作、建筑功能表、规则改动、美术规格、技术架构、里程碑和任务清单都在里面。美术样张在 `design/2d-美术设计稿-B.html`。
+
+- 文字版冻结在 `text-version` 分支：只修 bug，不加功能。
+- 下面的内容描述的是文字版。2D 版继续遵守其中的通用规则（`Msg` 和词典、数值只写在 `src/config/`、随机只用 `sim/rng.ts`、状态可序列化、改动后跑测试和构建），其余以 `docs/2d-design.md` 为准。
+
 ## 项目是什么
 
 《雾屿航线》（Foghaul）：单人网页文字经营探索游戏。React + TypeScript + Vite，纯前端，无后端，存档在 localStorage，中英双语。线上地址：https://foghaul.junxuan-bao.workers.dev
