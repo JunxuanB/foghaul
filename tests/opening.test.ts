@@ -37,28 +37,35 @@ describe('opening', () => {
     expect(island(s, 'nativeA').revealed).toBe(false);
   });
 
-  it('crafts anywhere: cups at sea, but distilling needs a network island', async () => {
+  it('crafts only at a workbench: not at sea, and only next to it on the home island', async () => {
     const { runUntil } = await import('../src/sim/bot');
     const { craftBlock } = await import('../src/sim/actions');
     const s = runUntil(8, 'lumberjack');
     must(s, { t: 'leave' });
     s.player.pack = { wood: 3 };
     s.player.hold = {};
+    expect(dispatch(s, { t: 'craft', recipe: 'cup', times: 2 }).msg?.k).toBe('err.needWorkbench');
+    sailTo(s, 'home');
+    // 码头离工作台很远
+    expect(dispatch(s, { t: 'craft', recipe: 'cup', times: 2 }).msg?.k).toBe('err.notNear');
     must(s, { t: 'craft', recipe: 'cup', times: 2 });
     expect(s.player.pack.cup).toBe(4);
     expect(s.player.pack.wood).toBe(1);
-    expect(craftBlock(s, 'distill')?.k).toBe('err.needOwnedIsland');
     expect(craftBlock(s, 'raft')?.k).toBe('err.hasRaft');
   });
 
-  it('reveals interface features gradually', () => {
+  it('gathering needs the right object nearby, and the HUD appears step by step', () => {
     const s = createGame(77);
-    expect(s.unlocks).not.toContain('shoreFish');
+    expect(s.unlocks).not.toContain('goal');
+    expect(s.unlocks).not.toContain('hotbar');
+    // 出生点旁边没有树
+    expect(dispatch(s, { t: 'gather', what: 'branch' }).msg?.k).toBe('err.notNear');
     must(s, { t: 'gather', what: 'branch' });
     must(s, { t: 'gather', what: 'branch' });
-    expect(s.unlocks).toContain('shoreFish');
-    expect(s.unlocks).not.toContain('sea');
+    expect(s.unlocks).toContain('hotbar');
+    expect(s.unlocks).not.toContain('vitals');
     expect(s.player.pack.wood).toBe(2);
+    expect(dispatch(s, { t: 'sleep' }).ok).toBe(false);
   });
 
   it('the next island only appears after a lighthouse is built where you are', async () => {

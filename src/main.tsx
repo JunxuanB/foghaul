@@ -1,27 +1,24 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import '@fontsource/fusion-pixel-12px-proportional-sc';
 import { GameStore } from './store/GameStore';
-import { StoreContext } from './store/hooks';
+import { StoreContext, ViewContext } from './store/hooks';
+import { ViewStore } from './store/view';
 import { App } from './ui/App';
 import './ui/styles/global.css';
 
 const store = new GameStore();
+const view = new ViewStore();
 store.start();
-(window as unknown as { foghaul: GameStore }).foghaul = store;
-if (import.meta.env.DEV) {
-  // 调试：在控制台里用 foghaulDev.preset('M3 first route') 跳到里程碑
-  import('./sim/presets').then(({ applyPreset, PRESETS }) => {
-    (window as unknown as { foghaulDev: unknown }).foghaulDev = {
-      presets: PRESETS.map((p) => p.id),
-      preset: (id: string) => store.replace(applyPreset(id, store.state.seed)),
-    };
-  });
-}
+(window as unknown as { foghaul: GameStore; foghaulView: ViewStore }).foghaul = store;
+(window as unknown as { foghaulView: ViewStore }).foghaulView = view;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <StoreContext.Provider value={store}>
-      <App />
+      <ViewContext.Provider value={view}>
+        <App />
+      </ViewContext.Provider>
     </StoreContext.Provider>
   </StrictMode>,
 );

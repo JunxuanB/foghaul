@@ -1,3 +1,5 @@
+import { SAVE_VERSION } from './save';
+import { layout } from '../world/island';
 import { BALANCE } from '../config/balance';
 import { NATIVE_NAME_COUNT, OPENING_LINES } from '../config/text';
 import { ISLANDS, VILLAGES, type VillageId } from '../config/world';
@@ -77,7 +79,7 @@ export function createGame(seed: number = newSeed()): GameState {
 
   const S = BALANCE.survival;
   const state: GameState = {
-    version: 4,
+    version: SAVE_VERSION,
     seed,
     rng: seed ^ 0x5bd1e995,
     time: BALANCE.time.startMinute,
@@ -112,6 +114,9 @@ export function createGame(seed: number = newSeed()): GameState {
       target: null,
       twoStep: true,
     },
+    walk: { island: 'home', x: 0, y: 0, facing: 'down', moved: 0 },
+    guide: { step: 0, vitalsSeen: false },
+    intros: [],
     villages,
     flags: {
       herbsLeft: BALANCE.home.herb.total,
@@ -142,6 +147,9 @@ export function createGame(seed: number = newSeed()): GameState {
     cutscene: null,
     nextPersonNo: no,
   };
+  const L = layout('home', seed);
+  state.walk.x = L.spawn[0];
+  state.walk.y = L.spawn[1];
   lightFrom(state, home);
   look(state);
   for (let i = 0; i < OPENING_LINES; i++) say(state, 'opening.' + i);

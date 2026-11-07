@@ -2,12 +2,13 @@ import { BALANCE } from '../config/balance';
 import { dispatch } from '../sim/actions';
 import { advance } from '../sim/advance';
 import { createGame } from '../sim/create';
+import { updateUnlocks } from '../sim/tutorial';
 import { clearStorage, loadFromStorage, saveToStorage } from '../sim/save';
 import type { Command, GameState, Result } from '../sim/types';
 
 type Listener = () => void;
 
-/** 实时循环、自动存档、订阅。模拟逻辑都在 sim/ 里，这里只负责驱动。 */
+/** 时间推进、自动存档、订阅。模拟逻辑都在 sim/ 里，这里只负责驱动。2D 版由画面层每帧调用 frame()。 */
 export class GameStore {
   state: GameState;
   version = 0;
@@ -19,9 +20,10 @@ export class GameStore {
   /** 启动时本地是否已有存档 */
   readonly hadSave: boolean;
   private listeners = new Set<Listener>();
-  private timer: ReturnType<typeof setInterval> | null = null;
-  private last = 0;
+  private started = false;
   private lastSave = 0;
+  /** 累计的游戏分钟，满 1 分钟才交给 sim 推进 */
+  private pending = 0;
 
   constructor(state?: GameState) {
     const saved = state ?? loadFromStorage();
@@ -42,24 +44,21 @@ export class GameStore {
   }
 
   start() {
-    if (this.timer) return;
-    this.last = performance.now();
-    this.lastSave = this.last;
-    this.timer = setInterval(() => this.tick(), 200);
+    if (this.started) return;
+    this.started = true;
+    this.lastSave = performance.now();
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('beforeunload', this.save);
   }
 
   stop() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    this.started = false;
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('beforeunload', this.save);
   }
 
   private onVisibility = () => {
     if (document.hidden) this.save();
-    this.last = performance.now();
   };
 
   /** 是否在跑时间：页面可见、未暂停、没有过场 */
@@ -67,18 +66,23 @@ export class GameStore {
     return !this.paused && this.holds.size === 0 && !document.hidden && !this.state.cutscene;
   }
 
-  private tick() {
+  /** 画面层每帧调用：dtMs 为现实毫秒。返回这一帧有没有推进时间 */
+  frame(dtMs: number): boolean {
+    if (!this.running) return false;
+    const dt = Math.min(dtMs, BALANCE.time.maxRealStepMs);
+    this.pending += ((dt / 1000) / BALANCE.time.realSecondsPerGameHour) * 60 * this.speed;
     const now = performance.now();
-    const dt = Math.min(now - this.last, BALANCE.time.maxRealStepMs);
-    this.last = now;
-    if (!this.running) return;
-    const minutes = ((dt / 1000) / BALANCE.time.realSecondsPerGameHour) * 60 * this.speed;
-    advance(this.state, minutes);
     if (now - this.lastSave > BALANCE.save.autosaveSeconds * 1000) {
       this.save();
       this.lastSave = now;
     }
+    if (this.pending < 1) return false;
+    const whole = Math.floor(this.pending);
+    this.pending -= whole;
+    advance(this.state, whole);
+    updateUnlocks(this.state);
     this.bump();
+    return true;
   }
 
   dispatch = (cmd: Command): Result => {
@@ -97,13 +101,11 @@ export class GameStore {
     if (on === had) return;
     if (on) this.holds.add(reason);
     else this.holds.delete(reason);
-    this.last = performance.now();
     this.bump();
   }
 
   setPaused(p: boolean) {
     this.paused = p;
-    this.last = performance.now();
     this.bump();
   }
 

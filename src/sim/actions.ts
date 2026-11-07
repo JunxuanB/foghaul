@@ -24,6 +24,7 @@ import {
 import { canEnter, lightCircle, lightCorridor, look } from './map';
 import { checkReveals, lightFrom } from './reveal';
 import { updateUnlocks } from './tutorial';
+import { placeAtDock, positionError } from './interact';
 import { fail, OK, say } from './log';
 import { islandM, itemM, m, recipeM, roleM, stockP, type Msg } from './msg';
 import { headcountOf, isHungry, presentPeople, sameJob, teachableJobs } from './people';
@@ -95,6 +96,7 @@ function dock(state: GameState): Result {
   const isl = islandAt(state, p.x, p.y);
   if (!isl || !isl.discovered) return fail('err.noIsland');
   p.at = isl.id;
+  placeAtDock(state, isl.id);
   state.pendingCrate = null;
   if (!isl.visited) {
     isl.visited = true;
@@ -685,6 +687,8 @@ function fly(state: GameState, to: string): Result {
 
 export function dispatch(state: GameState, cmd: Command): Result {
   if (state.cutscene && cmd.t !== 'endCutscene') return fail('err.cutscene');
+  const pos = positionError(state, cmd);
+  if (pos) return fail(pos.k, pos.p);
   const r = run(state, cmd);
   if (!r.ok && r.msg) say(state, r.msg, 'warn');
   checkReveals(state);
@@ -791,6 +795,12 @@ function run(state: GameState, cmd: Command): Result {
       return OK;
     case 'dismissTip':
       if (!state.tips.includes(cmd.id)) state.tips.push(cmd.id);
+      return OK;
+    case 'seeIntro':
+      if (!state.intros.includes(cmd.kind)) state.intros.push(cmd.kind);
+      return OK;
+    case 'ackGuide':
+      state.guide.vitalsSeen = true;
       return OK;
   }
 }

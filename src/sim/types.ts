@@ -148,6 +148,18 @@ export interface PlayerState {
   twoStep: boolean;
 }
 
+export type Facing = 'down' | 'up' | 'left' | 'right';
+
+/** 2D：人物在岛上的位置（像素，脚底中点）。画面层每帧写回，规则只在动作发生时读 */
+export interface Walk {
+  island: string;
+  x: number;
+  y: number;
+  facing: Facing;
+  /** 累计走过的距离（像素），引导第 1 步用 */
+  moved: number;
+}
+
 export interface PendingCrate {
   loot: Stock;
   text: Msg | null;
@@ -178,6 +190,12 @@ export interface GameState {
   /** 等待用全屏弹窗告诉玩家的新配方 */
   recipePopup: RecipeId[];
   player: PlayerState;
+  /** 2D：岛上的位置 */
+  walk: Walk;
+  /** 2D：第一天脚本引导进行到第几步；vitalsSeen 为“状态条介绍”已看过 */
+  guide: { step: number; vitalsSeen: boolean };
+  /** 2D：已经出现过“初见介绍”的物体种类 */
+  intros: string[];
   villages: Record<VillageId, VillageState>;
   flags: {
     herbsLeft: number;
@@ -252,7 +270,9 @@ export type Command =
   | { t: 'toggleTwoStep' }
   | { t: 'dismissTip'; id: string }
   | { t: 'seenRecipes' }
-  | { t: 'ackRecipes' };
+  | { t: 'ackRecipes' }
+  | { t: 'seeIntro'; kind: string }
+  | { t: 'ackGuide'; id: 'vitals' };
 
 export interface Result {
   ok: boolean;
