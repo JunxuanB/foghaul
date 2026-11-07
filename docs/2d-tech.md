@@ -56,7 +56,7 @@ i18n/     中英词典
 | `lastFight` | 最近一次海上战斗（界面显示一张小卡片） |
 | `pendingCrate.x / y` | 漂流物在海面上的位置 |
 
-存档：`sim/save.ts`，`SAVE_VERSION = 4`，键 `foghaul2d.save.v1`（v4：每座岛都长树和草药）。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
+存档：`sim/save.ts`，`SAVE_VERSION = 5`，键 `foghaul2d.save.v1`（v4：每座岛都长树和草药；v5：设施暂存箱 `isl.output`、`state.today`、`state.report`。旧档里超出新格子的东西保留，只是放不进新的）。读旧档的测试在 `tests/storage2d.test.ts`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
 
 界面临时状态（不存档）在 `store/view.ts` 的 `ViewState`：开着的面板、选中的物体、按键提示、初见介绍、正在做的动作、快捷栏选中格、“+1”、调试用的画面时刻。
 
@@ -155,16 +155,29 @@ i18n/     中英词典
 
 - **东西放到哪**：`giveToPlayer` 默认先放背包，满了放货舱，再满了放这座岛的仓库（网络里的岛）。只有“运货”的补给才点名放货舱。
 - **货舱**：海上按 Tab 打开背包和货舱两栏（`Views.tsx` 的 `PackHoldBody`），可以互相搬；在岛上货舱能看不能搬，要走到码头边的**木筏**（`raft@<岛>`，人在哪座岛就停在哪座岛的码头边）旁按 E，在木筏面板里装卸、全部卸到岛上仓库、加固货舱。规则层：涉及货舱的 `transfer` 和 `build holdUpgrade` 都要在木筏旁（`objectFor`）。
-- **仓库里的东西**：储物箱面板右栏是仓库格（`StockGrid`：每种物品一格，格子上沿的细条是“数量 / 上限”）。鼠标停过的格子在底栏显示名字和数量，能吃喝的有“吃 / 喝”按钮（`consume from: 'stock'`，要在储物箱旁）。
+- **储物箱**：右栏是储物箱的格子（`SlotGrid`，内容是 `dryStock(isl.stock)`：去掉淡水），格数 `stockSlots()`，下面一条水缸（`TankStrip`：水位条、“喝”=`consume from: 'stock', item: 'water'`、“装杯”=`fillCup`）。鼠标停过的格子在底栏显示名字和数量，能吃喝的有“吃 / 喝”按钮（要在储物箱旁）。
 
-`sim/inventory.ts`：背包 `BALANCE.inventory.packCap` 格、货舱 `player.holdCap` 格；每格一种东西，堆叠上限 `stackOf()`（能吃喝用的 10，其他 20）；零件不占格。`roomIn()` 算还能放多少，`slotView()` 把容器排成格子给界面画。岛上仓库不按格子：每种物品上限 `stockCap()`。
+`sim/inventory.ts`：背包 `BALANCE.inventory.packCap` 格、货舱 `player.holdCap` 格；每格一种东西，堆叠上限 `stackOf()`（能吃喝用的 10，其他 20）；零件不占格。`roomIn()` 算还能放多少，`slotView()` 把容器排成格子给界面画。
+
+岛上（`BALANCE.inventory.island`）：
+- **储物箱**和背包同一套格子 + 堆叠：`stockSlots(state, isl)`（主岛 / 网络岛按等级，加建仓库多几格，进出口局升级按倍数）。`stockRoom(state, isl, item)` 按格子算还能放多少。
+- **水缸**：散装的东西（`isBulk(item)` = 不能带走，目前只有淡水）不占格子，存在 `isl.stock` 里但上限是 `tankCap(state, isl)`。
+- **设施暂存箱** `isl.output`：设施的产物先放这里，每种上限 `outputCap(isl, item)` = 等级对应的格数 × 一组。满了停工（`work.outputFull`；淡水进水缸，满了 `work.tankFull`）。命令 `collect { to: 'pack' | 'stock', item? }` 在设施旁把东西拿到背包或放进储物箱，放得下多少拿多少。
+- 岛民吃饭用 `takeFromIsland()`：先储物箱、后暂存箱。加工设施的原料、运输线只用储物箱。
 
 ## 10.5 设施和岛的升级
 
 - 加入网络、有了工作（`island.facility`）的岛，在模板的 `slots.facility` 位置出现设施建筑（`facility@<岛>`）。精灵按产物或配方选（`config/buildings.ts` 的 `FACILITY_SPRITE`）。
+- 产物去哪：`economy.ts` 的 `produce`：淡水进水缸，其他进暂存箱；每产一个记进 `dayLog(state, isl).made`。
 - 头顶：进度条 = `island.prodAcc` 的小数部分；停工（`islandRate` 为 0 或犯困）时换成一个慢慢浮动的气泡，里面是停工原因的图标（`config/visual.ts` 的 `WORK_ICON`：缺人、缺饭、满仓、犯困……，设施面板用同一张表）。等级画在建筑上：2 级起屋顶插一面小旗，3 级两面（`IslandScene.drawFacilityStatus`）。有火的设施（蒸馏棚、烤炉）夜里发光。
-- 设施面板（`ui/panels/IslandPanels.tsx`，“建筑详情”模板）：左边设施的图和等级星；右边三张卡按主次排——①产出（产物大图标、每小时多少、仓库条、运转 / 停工原因）②工人（头像格，空位是虚线人形）③升级卡（连续吃饱画成碗、材料格、升级后“现在 → 以后”的产量 / 上限 / 人数）。底栏左边是还差什么，右边“升到 N 级”按钮，两个条件都满足才亮。“培训”是灰着的分页，点开显示“下一阶段开放”。
+- 设施面板（`ui/panels/IslandPanels.tsx`，“建筑详情”模板）：左边设施的图和等级星；右边三张卡按主次排——①产出（产物大图标、每小时多少、运转 / 停工原因；下面是暂存箱的格子和“拿到背包”“全部放进仓库”，产淡水的设施换成水缸的水位条）②工人（头像格，空位是虚线人形）③升级卡（连续吃饱画成碗、材料格、升级后“现在 → 以后”的产量 / 上限 / 人数）。底栏左边是还差什么，右边“升到 N 级”按钮，两个条件都满足才亮。“培训”是灰着的分页，点开显示“下一阶段开放”。
 - **升级**：`economy.ts` 吃饭时只累计 `mealStreak`，够了写一条日志；玩家在设施旁发 `{ t: 'upgradeIsland' }`，规则层检查连续吃饱、扣 `BALANCE.economy.upgradeCost` 的材料，再 `levelUp`（灯塔照得更远）。不要再在吃饭里自动升级。
+
+## 10.6 昨日收成
+
+- 记录：`state.today[岛 id] = { made, meals }`。`produce` 记产出，`mealAt` 记网络岛的每顿（吃饱 / 凑合 / 断供）。
+- 每天 06:00（`advance.ts` 的 `hourly`，先于当天第一顿）调 `closeDay(state, 昨天)`：网络岛里有动静的各成一行，存进 `state.report`（`seen: false`），清空 `today`。一整天什么都没产就不出卡片。
+- 界面：`ui/popups/ReportPopup.tsx`，用同一个 `Panel` 外框（`onClose` 改成“知道了”），暂停时间（`store.hold('report')`），每行岛名 + 等级星 + 产出格 + 三个碗（`ui_bowl` / `ui_bowlHalf` / `ui_bowlEmpty`），底栏是合计。Esc / Enter / E 都发 `ackReport`；新配方弹窗优先。
 
 ## 11. 引导
 

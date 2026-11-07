@@ -7,7 +7,7 @@ import { PART_IDS, type ItemId } from '../../config/items';
 import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
 import { LANGS, t, tm } from '../../i18n';
 import { canUseStock, craftBlock, here } from '../../sim/actions';
-import { slotsUsed } from '../../sim/inventory';
+import { dryStock, slotsUsed, stockSlots } from '../../sim/inventory';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
 import { Card, Cell, CostGrid, Icon, Key, Picture, reasonText, Yield } from '../components/Kit';
 import { Rich } from '../components/Text';
@@ -15,7 +15,7 @@ import { useUi } from '../ui';
 import { FacilityPanel, RaftPanel } from './IslandPanels';
 import { Panel } from './Panel';
 import { LighthousePanel, MapPanel, TalkPanel } from './SeaPanels';
-import { Column, FocusActions, FocusStatus, PackHoldBody, SlotGrid, StockGrid, useFocus } from './Views';
+import { Column, FocusActions, FocusStatus, PackHoldBody, SlotGrid, TankStrip, useFocus } from './Views';
 
 const P = BALANCE.inventory;
 
@@ -149,13 +149,15 @@ export function CraftPanel() {
   );
 }
 
-/** 储物箱：左边背包，右边岛上仓库（每种物品一格，下沿是“数量 / 上限”）。点一下整格放进 / 取出 */
+/** 储物箱：左边背包，右边储物箱的格子（和背包同一套格子 + 堆叠，格数随岛等级变多），下面是单独的水缸。点一下整格放进 / 取出 */
 export function ChestPanel() {
   const g = useGame();
   const store = useStore();
   const isl = here(g);
   const [focus, setFocus] = useFocus();
   if (!isl || !canUseStock(isl)) return null;
+  const dry = dryStock(isl.stock);
+  const slots = stockSlots(g, isl);
   const move = (id: ItemId, from: 'pack' | 'stock') => {
     const src = from === 'pack' ? g.player.pack : isl.stock;
     store.dispatch({ t: 'transfer', item: id, from, to: from === 'pack' ? 'stock' : 'pack', n: src[id] ?? 0 });
@@ -171,9 +173,12 @@ export function ChestPanel() {
         <Column icon="ui_pack" title={t('ui.pack')} right={t('ui.slotsUsed', { n: slotsUsed(g.player.pack), cap: P.packCap })}>
           <SlotGrid stock={g.player.pack} slots={P.packCap} cols={4} where="pack" focus={focus} onFocus={setFocus} onPick={(id) => move(id, 'pack')} />
         </Column>
-        <Column icon="ui_stock" title={t('ui.stock')}>
-          <StockGrid g={g} isl={isl} cols={6} focus={focus} onFocus={setFocus} onPick={(id) => move(id, 'stock')} />
-        </Column>
+        <div className="v-col">
+          <Column icon="ui_stock" title={t('ui.warehouse')} right={t('ui.slotsUsed', { n: slotsUsed(dry), cap: slots })}>
+            <SlotGrid stock={dry} slots={slots} cols={6} where="stock" focus={focus} onFocus={setFocus} onPick={(id) => move(id, 'stock')} />
+          </Column>
+          <TankStrip g={g} isl={isl} />
+        </div>
       </div>
     </Panel>
   );

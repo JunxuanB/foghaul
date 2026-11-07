@@ -24,6 +24,7 @@ export function Panel({
   onTab,
   status,
   actions,
+  onClose,
   children,
 }: {
   title: string;
@@ -34,6 +35,8 @@ export function Panel({
   onTab?: (id: string) => void;
   status?: ReactNode;
   actions?: ReactNode;
+  /** 关闭时做什么（默认关掉当前面板；弹窗用它来“知道了”） */
+  onClose?: () => void;
   children: ReactNode;
 }) {
   const vs = useViewStore();
@@ -55,7 +58,7 @@ export function Panel({
               ))}
             </nav>
           )}
-          <button className="x" onClick={() => vs.set({ panel: null })} aria-label={t('ui.close')}>
+          <button className="x" onClick={onClose ?? (() => vs.set({ panel: null }))} aria-label={t('ui.close')}>
             <span className="u-key">Esc</span>
           </button>
         </header>

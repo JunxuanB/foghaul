@@ -26,6 +26,19 @@ export interface Buildings {
 
 export type MealState = 'full' | 'partial' | 'none';
 
+/** 一座岛一天的记录 */
+export interface DayLog {
+  made: Stock;
+  meals: MealState[];
+}
+
+/** 昨日收成：每座网络里有设施或有人住的岛一行 */
+export interface HarvestReport {
+  day: number;
+  rows: { id: string; made: Stock; meals: MealState[]; level: number }[];
+  seen: boolean;
+}
+
 export interface Island {
   id: string;
   kind: IslandKind;
@@ -51,6 +64,8 @@ export interface Island {
   /** 上一顿缺什么，用于界面提示 */
   lastMealNote: string;
   stock: Stock;
+  /** 设施暂存箱：设施的产物先放这里（淡水除外，直接进水缸），满了停工 */
+  output: Stock;
   buildings: Buildings;
   sleepy: boolean;
   prodAcc: number;
@@ -230,6 +245,10 @@ export interface GameState {
   /** 2D：木筏在海面上的位置（像素）。player.x / y 仍是它所在的格子 */
   raft: { x: number; y: number };
   lastFight: FightRecord | null;
+  /** 今天（从早上 06:00 起）各岛产了什么、每顿吃得怎样 */
+  today: Record<string, DayLog>;
+  /** 昨天的收成：早上 06:00 由 today 生成，玩家看过后 seen = true */
+  report: HarvestReport | null;
   villages: Record<VillageId, VillageState>;
   flags: {
     farm: (number | null)[];
@@ -307,6 +326,11 @@ export type Command =
   | { t: 'ackRecipes' }
   | { t: 'seeIntro'; kind: string }
   | { t: 'upgradeIsland' }
+  /** 从设施暂存箱拿东西：item 省略时全部拿；to 是背包或这座岛的储物箱 */
+  | { t: 'collect'; to: 'pack' | 'stock'; item?: ItemId }
+  /** 在储物箱旁用水缸里的淡水装一杯（要会“装杯”、有空杯子） */
+  | { t: 'fillCup' }
+  | { t: 'ackReport' }
   | { t: 'ackGuide'; id: 'vitals' };
 
 export interface Result {

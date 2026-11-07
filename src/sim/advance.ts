@@ -1,7 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { ITEMS, type ItemId } from '../config/items';
-import { isNight, minuteOfDay } from './clock';
-import { births, meal, produce, sleepyCheck } from './economy';
+import { dayOf, isNight, minuteOfDay } from './clock';
+import { births, closeDay, meal, produce, sleepyCheck } from './economy';
 import { bureauHourly } from './endgame';
 import { say } from './log';
 import { islandM, m, recipeM, stockP } from './msg';
@@ -45,11 +45,13 @@ function survive(state: GameState, minutes: number, opts: AdvanceOpts): void {
 
 function hourly(state: GameState): void {
   const m = minuteOfDay(state.time);
-  if (BALANCE.economy.mealTimes.includes(m)) meal(state);
+  // 早上先结算昨天（昨日收成），再吃今天的第一顿
   if (m === BALANCE.time.dayStart) {
+    closeDay(state, dayOf(state.time) - 1);
     births(state);
     dailyForage(state);
   }
+  if (BALANCE.economy.mealTimes.includes(m)) meal(state);
   sleepyCheck(state);
   bureauHourly(state);
 }

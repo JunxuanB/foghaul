@@ -8,6 +8,7 @@ import { Hud } from './hud/Hud';
 import { WorldLayer } from './hud/WorldLayer';
 import { PanelHost } from './panels/Panels';
 import { RecipePopup } from './popups/RecipePopup';
+import { ReportPopup } from './popups/ReportPopup';
 import { DevPanel } from './DevPanel';
 
 const SHOW_DEV = import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
@@ -43,6 +44,7 @@ export function GameView() {
         </div>
         <PanelHost />
         <RecipePopup />
+        <ReportPopup />
       </div>
       {SHOW_DEV && <DevPanel />}
     </div>

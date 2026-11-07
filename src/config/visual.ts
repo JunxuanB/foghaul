@@ -116,6 +116,8 @@ export const WORK_ICON: Record<string, string> = {
   'work.partial': 'ui_bowlEmpty',
   'work.sleepy': 'ui_warn',
   'work.full': 'ui_stock',
+  'work.outputFull': 'ui_stock',
+  'work.tankFull': 'ui_tank',
   'work.noInput': 'ui_warn',
   'work.noFacility': 'ui_warn',
 };

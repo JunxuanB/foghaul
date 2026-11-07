@@ -35,20 +35,22 @@ ic('partGear', (g) => { g.rect(2, 12, 12, 2, 'm1'); g.rect(2, 13, 12, 1, 'm0'); 
 // 面板里用图画代替句子：吃饱的碗、空碗、等级星、时间、箭头、警告、对勾、背包、货舱、仓库、人。
 
 /** 一个碗：lit 为吃饱（暖色、冒热气），否则是空碗（冷色） */
-const bowl = (lit: boolean) => (g: G) => {
+const bowl = (lit: boolean, steam = lit) => (g: G) => {
   const c = lit ? ['w1', 'w2', 'w3'] : ['s0', 's1', 's2'];
   g.ellS(8, 10, 6.5, 3.6, lit ? 'w' : 's', { lo: lit ? 1 : 0 });
   for (let y = 7; y < 10; y++) g.rect(2, y, 13, 1, 'o');
   g.rect(2, 9, 13, 1, c[1]);
   g.rect(3, 8, 11, 1, lit ? 'q1' : 's0');
-  if (lit) {
-    g.rect(4, 7, 9, 1, 'q2');
+  if (lit) g.rect(4, 7, 9, 1, steam ? 'q2' : 'q0');
+  if (steam) {
     g.set(6, 4, 'i6'); g.set(7, 3, 'i6'); g.set(10, 4, 'i6'); g.set(9, 2, 'i6');
   }
   g.rect(6, 14, 5, 1, c[0]);
 };
 ic('ui_bowl', bowl(true));
 ic('ui_bowlEmpty', bowl(false));
+/** 凑合的一顿：有吃的，但不冒热气（口粮档次不够） */
+ic('ui_bowlHalf', bowl(true, false));
 ic('ui_star', (g) => {
   const pts = [[8, 2], [8, 3], [7, 4], [8, 4], [9, 4], [7, 5], [8, 5], [9, 5]];
   for (const [x, y] of pts) g.set(x, y, 'i11');
@@ -96,3 +98,10 @@ ic('ui_personEmpty', (g) => {
 ic('ui_eye', (g) => {
   g.ellS(8, 8, 6.5, 3.5, 'e', { hi: 3 }); g.ell(8, 8, 2.4, 2.4, 'i1'); g.set(7, 7, 'e3');
 });
+ic('ui_tank', (g) => {
+  // 木桶装着淡水：桶身是木头，上面一圈水面，中间一滴水
+  g.cyl(3, 4, 10, 10, 'w', [1, 2, 2, 1, 1, 0]);
+  g.rect(3, 7, 10, 1, 'w0'); g.rect(3, 11, 10, 1, 'w0');
+  g.rect(3, 3, 10, 2, 'g1'); g.rect(4, 3, 8, 1, 'g2'); g.set(5, 3, 'e3');
+  g.rect(7, 8, 2, 2, 'g2'); g.set(7, 7, 'g2'); g.set(8, 10, 'g1');
+})

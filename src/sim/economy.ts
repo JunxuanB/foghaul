@@ -3,13 +3,13 @@ import { ITEMS, type ItemId } from '../config/items';
 import { RECIPES, ROLE_BIOME } from '../config/recipes';
 import { spawnNative } from './create';
 import { lightFrom } from './reveal';
-import { addToStock, stockRoom } from './inventory';
+import { addToStock, isBulk, islandSupply, outputRoom, stockRoom, takeFromIsland } from './inventory';
 import { say } from './log';
 import { islandM, m } from './msg';
 import { canDo, facilityRole, isHungry, residentsOf, roleOf, workersAt } from './people';
 import { gainPersonXp, levelInfo, playerLevel } from './progression';
 import { chance, rand } from './rng';
-import type { GameState, Island, MealState, Stock } from './types';
+import type { DayLog, GameState, Island, MealState, Stock } from './types';
 import { stockAdd, stockGet } from './util';
 
 const E = BALANCE.economy;
@@ -88,15 +88,9 @@ export function produce(state: GameState, minutes: number): void {
     isl.prodAcc += (rate * minutes) / 60;
     const fac = isl.facility;
     while (isl.prodAcc >= 1) {
-      if (fac.kind === 'produce') {
-        if (stockRoom(state, isl, fac.item) < 1) {
-          isl.workNote = 'work.full';
-          isl.prodAcc = 1;
-          break;
-        }
-        addToStock(state, isl, fac.item, 1);
-        recordProduced(state, fac.item, 1, true);
-      } else {
+      // 产物去哪：淡水进水缸，其他进设施暂存箱（满了停工，见 docs/2d-design.md “玩法梳理”）
+      const outs: Stock = fac.kind === 'produce' ? { [fac.item]: 1 } : (RECIPES[fac.recipe].outputs as Stock);
+      if (fac.kind === 'process') {
         const r = RECIPES[fac.recipe];
         const ok = Object.entries(r.inputs).every(([k, v]) => spareStock(state, isl, k as ItemId) >= (v ?? 0));
         if (!ok) {
@@ -104,17 +98,21 @@ export function produce(state: GameState, minutes: number): void {
           isl.prodAcc = 1;
           break;
         }
-        const room = Object.entries(r.outputs).every(([k, v]) => stockRoom(state, isl, k as ItemId) >= (v ?? 0));
-        if (!room) {
-          isl.workNote = 'work.full';
-          isl.prodAcc = 1;
-          break;
-        }
-        for (const [k, v] of Object.entries(r.inputs)) stockAdd(isl.stock, k as ItemId, -(v ?? 0));
-        for (const [k, v] of Object.entries(r.outputs)) {
-          addToStock(state, isl, k as ItemId, v ?? 0);
-          recordProduced(state, k as ItemId, v ?? 0, false);
-        }
+      }
+      const full = Object.entries(outs).find(([k, v]) => (isBulk(k as ItemId) ? stockRoom(state, isl, k as ItemId) : outputRoom(isl, k as ItemId)) < (v ?? 0));
+      if (full) {
+        isl.workNote = isBulk(full[0] as ItemId) ? 'work.tankFull' : 'work.outputFull';
+        isl.prodAcc = 1;
+        break;
+      }
+      if (fac.kind === 'process') for (const [k, v] of Object.entries(RECIPES[fac.recipe].inputs)) stockAdd(isl.stock, k as ItemId, -(v ?? 0));
+      for (const [k, v] of Object.entries(outs)) {
+        const id = k as ItemId;
+        const n = v ?? 0;
+        if (isBulk(id)) addToStock(state, isl, id, n);
+        else stockAdd(isl.output, id, n);
+        stockAdd(dayLog(state, isl).made, id, n);
+        recordProduced(state, id, n, fac.kind === 'produce');
       }
       isl.prodAcc -= 1;
     }
@@ -145,12 +143,7 @@ function takeFood(isl: Island, tier: number): 'exact' | 'higher' | 'lower' | nul
     [byTier((t) => t < tier).reverse(), 'lower'],
   ];
   for (const [list, kind] of tries) {
-    for (const f of list) {
-      if (stockGet(isl.stock, f) > 0) {
-        stockAdd(isl.stock, f, -1);
-        return kind;
-      }
-    }
+    for (const f of list) if (takeFromIsland(isl, f)) return kind;
   }
   return null;
 }
@@ -164,8 +157,8 @@ export function relieve(state: GameState, isl: Island): void {
   if (isl.lastMeal !== 'none') return;
   const n = residentsOf(state, isl).length;
   if (!n) return;
-  const water = stockGet(isl.stock, 'water') + stockGet(isl.stock, 'bottledWater');
-  const food = FOOD_IDS.reduce((s, f) => s + stockGet(isl.stock, f), 0);
+  const water = islandSupply(isl, 'water') + islandSupply(isl, 'bottledWater');
+  const food = FOOD_IDS.reduce((s, f) => s + islandSupply(isl, f), 0);
   if (water < n || food < n) return;
   mealAt(state, isl, false);
   if (isl.lastMeal !== 'none') say(state, 'log.relieved', { isl: islandM(isl.id) }, 'got');
@@ -183,9 +176,7 @@ function mealAt(state: GameState, isl: Island, scheduled: boolean): void {
     const tier = isl.kind === 'home' ? 1 : Math.min(3, isl.level);
     let waterShort = 0;
     for (let i = 0; i < n; i++) {
-      if (stockGet(isl.stock, 'water') > 0) stockAdd(isl.stock, 'water', -1);
-      else if (stockGet(isl.stock, 'bottledWater') > 0) stockAdd(isl.stock, 'bottledWater', -1);
-      else waterShort++;
+      if (!takeFromIsland(isl, 'water') && !takeFromIsland(isl, 'bottledWater')) waterShort++;
     }
     let foodShort = 0;
     let lower = 0;
@@ -196,8 +187,7 @@ function mealAt(state: GameState, isl: Island, scheduled: boolean): void {
     }
     let saltShort = false;
     if (tier >= 3) {
-      if (stockGet(isl.stock, 'salt') > 0) stockAdd(isl.stock, 'salt', -1);
-      else saltShort = true;
+      if (!takeFromIsland(isl, 'salt')) saltShort = true;
     }
     const prev = isl.lastMeal;
     let st: MealState;
@@ -221,6 +211,7 @@ function mealAt(state: GameState, isl: Island, scheduled: boolean): void {
       if (st === 'none') isl.lastMeal = 'none';
       return;
     }
+    if (isl.owned) dayLog(state, isl).meals.push(st);
     if (st === 'full') {
       isl.mealStreak++;
       // 2D：吃饱够了只是“可以升级”，要玩家到设施旁手动升级（actions.ts 的 upgradeIsland）
@@ -284,3 +275,20 @@ export function births(state: GameState): void {
 }
 
 
+
+
+// ---------------- 昨日收成 ----------------
+
+/** 这座岛今天的记录（没有就新建） */
+export function dayLog(state: GameState, isl: Island): DayLog {
+  return (state.today[isl.id] ??= { made: {}, meals: [] });
+}
+
+/** 早上 06:00：把今天的记录变成“昨日收成”，清空重新记。网络里没有一座岛有动静就不出卡片 */
+export function closeDay(state: GameState, day: number): void {
+  const rows = state.islands
+    .filter((i) => i.owned && state.today[i.id] && (Object.keys(state.today[i.id].made).length || state.today[i.id].meals.length))
+    .map((i) => ({ id: i.id, made: state.today[i.id].made, meals: state.today[i.id].meals, level: i.level }));
+  state.today = {};
+  state.report = rows.some((r) => Object.keys(r.made).length) ? { day, rows, seen: false } : null;
+}

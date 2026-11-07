@@ -1,15 +1,15 @@
 // 同类面板共用的布局模板（docs/2d-tech.md “面板框架”）：
 // 两栏搬运（背包 ↔ 货舱 / 仓库）、格子、仓库格、选中物品的状态行。
 import { useState, type ReactNode } from 'react';
-import { ITEMS, ITEM_ORDER, type ItemId } from '../../config/items';
+import { ITEMS, type ItemId } from '../../config/items';
 import { t } from '../../i18n';
 import { BALANCE } from '../../config/balance';
 import { here } from '../../sim/actions';
-import { slotsUsed, slotView, stockCap } from '../../sim/inventory';
+import { slotsUsed, slotView, tankCap } from '../../sim/inventory';
 import { useGame, useStore } from '../../store/hooks';
 import type { GameState, Island, Stock } from '../../sim/types';
 import { ItemName, Slot } from '../components/Item';
-import { Chip, Icon } from '../components/Kit';
+import { Card, Chip, Icon } from '../components/Kit';
 
 export type Where = 'pack' | 'hold' | 'stock';
 export interface Focus {
@@ -74,47 +74,34 @@ export function SlotGrid({
   );
 }
 
-/** 岛上仓库：每种物品一格，格子下沿的条是“数量 / 上限” */
-export function StockGrid({
-  g,
-  isl,
-  cols,
-  focus,
-  onFocus,
-  onPick,
-}: {
-  g: GameState;
-  isl: Island;
-  cols: number;
-  focus?: Focus | null;
-  onFocus?: (f: Focus) => void;
-  onPick?: (id: ItemId) => void;
-}) {
-  const ids = ITEM_ORDER.filter((id) => (isl.stock[id] ?? 0) > 0);
-  const min = cols * 2;
+/** 水缸：淡水单独放（不占储物箱的格子），一根水位条 + “喝”“装杯” */
+export function TankStrip({ g, isl }: { g: GameState; isl: Island }) {
+  const store = useStore();
+  const n = isl.stock.water ?? 0;
+  const cap = tankCap(g, isl);
+  const canCup = g.player.recipes.includes('bottledWater');
+  const cups = (g.player.pack.cup ?? 0) + (g.player.hold.cup ?? 0) + (isl.stock.cup ?? 0);
   return (
-    <div className="v-grid" style={{ ['--cols' as string]: cols }}>
-      {ids.map((id) => {
-        const n = isl.stock[id] ?? 0;
-        const cap = stockCap(g, isl, id);
-        return (
-          <span key={id} className="v-stock" onMouseEnter={() => onFocus?.({ where: 'stock', id })}>
-            <Slot id={id} n={n} sel={focus?.where === 'stock' && focus.id === id} onClick={onPick && ITEMS[id].portable ? () => onPick(id) : undefined} />
-            <i className={n >= cap ? 'full' : ''} style={{ ['--v' as string]: Math.min(1, n / Math.max(1, cap)) }} />
-          </span>
-        );
-      })}
-      {Array.from({ length: Math.max(0, min - ids.length) }, (_, i) => (
-        <span key={'e' + i}>
-          <Slot />
+    <Card title={t('ui.tank')} icon="ui_tank" right={<span className="u-dim">{`${Math.floor(n)}/${cap}`}</span>} cls="tank">
+      <div className="v-tank">
+        <span className="v-tank-bar" style={{ ['--v' as string]: Math.min(1, n / Math.max(1, cap)) }}>
+          <i />
         </span>
-      ))}
-    </div>
+        <button className="u-btn sec" disabled={n < 1} onClick={() => store.dispatch({ t: 'consume', from: 'stock', item: 'water' })}>
+          {t('ui.drinkIt')}
+        </button>
+        {canCup && (
+          <button className="u-btn sec" disabled={n < 1 || cups < 1} onClick={() => store.dispatch({ t: 'fillCup' })} title={t('item.cup') + ' ×' + cups}>
+            <Icon id="cup" size={8} /> {t('ui.fillCup')}
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 
 /** 状态行：选中的物品（图标、名字、数量；仓库里的显示“数量 / 上限”） */
-export function FocusStatus({ g, isl, focus, src }: { g: GameState; isl?: Island; focus: Focus | null; src: Record<Where, Stock | undefined> }) {
+export function FocusStatus({ focus, src }: { g?: GameState; isl?: Island; focus: Focus | null; src: Record<Where, Stock | undefined> }) {
   if (!focus) return <span className="u-dim">{t('ui.selectedNone')}</span>;
   const s = src[focus.where];
   const n = s?.[focus.id] ?? 0;
@@ -122,7 +109,7 @@ export function FocusStatus({ g, isl, focus, src }: { g: GameState; isl?: Island
   return (
     <span className="v-focus">
       <ItemName id={focus.id} />
-      <span className="u-dim">{focus.where === 'stock' && isl ? `${n}/${stockCap(g, isl, focus.id)}` : '×' + n}</span>
+      <span className="u-dim">{'×' + n}</span>
     </span>
   );
 }

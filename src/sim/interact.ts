@@ -155,7 +155,10 @@ export function objectFor(cmd: Command): ObjKind | null {
     case 'build':
       return cmd.what === 'lighthouse' ? 'lighthouse' : cmd.what === 'holdUpgrade' ? 'raft' : null;
     case 'upgradeIsland':
+    case 'collect':
       return 'facility';
+    case 'fillCup':
+      return 'chest';
     default:
       return null;
   }

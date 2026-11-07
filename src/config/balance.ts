@@ -89,8 +89,6 @@ export const BALANCE = {
     shoreFish: { minutes: 30, chance: 0.6 },
     herb: { minutes: 15 },
     farm: { plots: 3, plantMinutes: 15, growMinutes: 24 * 60, yield: 6 },
-    /** 主岛仓库上限（每种物品） */
-    stockCap: 99,
     /** 货舱加固：每次 +10，最多到 60 */
     holdUpgrade: { woodCosts: [20, 35, 50], step: 6 },
   },
@@ -111,10 +109,24 @@ export const BALANCE = {
 
   // ---------------- 背包与货舱 ----------------
   // 2D 版按格子算：每格放一种东西，按种类有堆叠上限。飞机零件不占格子。
-  // 岛上仓库不按格子：每种物品各有上限（见 stockCap），满了生产会停。
+  // 岛上仓库（储物箱）也按格子：和背包、货舱同一套堆叠规则；淡水不占格，放在单独的水缸里。
+  // 设施的产物先进设施旁的暂存箱，暂存箱满了就停工；玩家决定什么时候、拿多少进仓库。
   inventory: {
     /** 随身背包的格数 */
     packCap: 12,
+    /** 岛上：储物箱格数（主岛 / 网络里的岛按等级）、水缸容量（淡水）、设施暂存箱能放几格（按等级）。仓库加建（depot）多几格、水缸大一些 */
+    island: {
+      homeSlots: 24,
+      slots: [12, 18, 24],
+      homeTank: 60,
+      tank: [30, 60, 90],
+      depotSlots: 6,
+      depotTank: 30,
+      /** 设施暂存箱：每级能放几格产物（一格 = 一组，堆叠规则同背包） */
+      outputStacks: [2, 3, 4],
+      /** 进出口局的仓库几乎不限 */
+      bureauSlots: 999,
+    },
     /** 木筏货舱的格数（加固后增加，见 home.holdUpgrade.step） */
     holdCap: 24,
     seats: 3,
@@ -140,7 +152,7 @@ export const BALANCE = {
       minutes: 90,
     },
     bed: { cost: { wood: 15 }, minutes: 60 },
-    depot: { cost: { wood: 10, cup: 4 }, minutes: 60, capBonus: 40 },
+    depot: { cost: { wood: 10, cup: 4 }, minutes: 60 },
     helipad: { cost: { wood: 25, salt: 4 }, minutes: 120 },
   },
 
@@ -150,11 +162,11 @@ export const BALANCE = {
     produceRate: { wood: 1.2, fish: 1.0, water: 1.5, wheat: 1.0, herb: 0.6 } as Record<string, number>,
     /** 加工建在绑定群系上的加成 */
     biomeBonus: 0.5,
-    /** 岛等级：产能倍率、仓库上限、人数上限 */
+    /** 岛等级：产能倍率、人数上限（仓库格数、水缸、设施暂存箱随等级变大，见 inventory.island） */
     levels: [
-      { mult: 1.0, cap: 40, people: 2 },
-      { mult: 1.5, cap: 80, people: 3 },
-      { mult: 2.0, cap: 120, people: 4 },
+      { mult: 1.0, people: 2 },
+      { mult: 1.5, people: 3 },
+      { mult: 2.0, people: 4 },
     ],
     /** 吃饭时刻（游戏分钟，一天内） */
     mealTimes: [6 * 60, 14 * 60, 22 * 60],

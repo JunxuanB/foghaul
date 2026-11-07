@@ -5,24 +5,49 @@ import { itemM, m, type Msg } from './msg';
 import type { GameState, Island, Stock, Where } from './types';
 import { findIsland, stockAdd, stockGet } from './util';
 
-/** 岛屿每种物品的仓库上限 */
-export function stockCap(state: GameState, isl: Island, item: ItemId): number {
-  if (isl.kind === 'bureau') return 9999;
-  if (isl.kind === 'home') return Math.round(BALANCE.home.stockCap * storageMult(state));
-  if (isl.kind === 'recipeVillage' || isl.kind === 'laborVillage') return 0;
-  const lv = BALANCE.economy.levels[isl.level - 1];
-  let cap = lv.cap;
-  const def = ITEMS[item];
-  if (isl.buildings.depot && (def.foodTier !== undefined || def.drink)) cap += BALANCE.buildings.depot.capBonus;
-  return Math.round(cap * storageMult(state));
+// ---------------- 岛上：储物箱（格子）、水缸（淡水）、设施暂存箱 ----------------
+// 储物箱和背包、货舱同一套“格子 + 堆叠”规则，格数随岛等级变多；
+// 淡水是散装的，不占格子，放在单独的水缸里（容量随等级变大）；
+// 设施的产物先进它旁边的暂存箱（isl.output），满了就停工。
+
+const IS = BALANCE.inventory.island;
+
+/** 散装的东西（淡水）：不占格子，放水缸 */
+export function isBulk(item: ItemId): boolean {
+  return !ITEMS[item].portable;
 }
 
 export function storageMult(state: GameState): number {
   return 1 + state.bureau.upgrades.storage * BALANCE.endgame.upgrades.storage.per;
 }
 
+/** 储物箱有几格（村落没有仓库） */
+export function stockSlots(state: GameState, isl: Island): number {
+  if (isl.kind === 'bureau') return IS.bureauSlots;
+  if (isl.kind === 'recipeVillage' || isl.kind === 'laborVillage') return 0;
+  const base = isl.kind === 'home' ? IS.homeSlots : IS.slots[isl.level - 1] ?? IS.slots[IS.slots.length - 1];
+  return Math.round((base + (isl.buildings.depot ? IS.depotSlots : 0)) * storageMult(state));
+}
+
+/** 水缸能装多少淡水 */
+export function tankCap(state: GameState, isl: Island): number {
+  if (isl.kind === 'bureau') return IS.bureauSlots * BALANCE.inventory.stack.consumable;
+  if (isl.kind === 'recipeVillage' || isl.kind === 'laborVillage') return 0;
+  const base = isl.kind === 'home' ? IS.homeTank : IS.tank[isl.level - 1] ?? IS.tank[IS.tank.length - 1];
+  return Math.round((base + (isl.buildings.depot ? IS.depotTank : 0)) * storageMult(state));
+}
+
+/** 储物箱里占格子的那部分（去掉水缸里的淡水） */
+export function dryStock(s: Stock): Stock {
+  const out: Stock = {};
+  for (const [k, v] of Object.entries(s)) if (!isBulk(k as ItemId) && (v ?? 0) > 0) out[k as ItemId] = v;
+  return out;
+}
+
+/** 岛上还能放多少个 item：淡水看水缸，其他看储物箱的格子 */
 export function stockRoom(state: GameState, isl: Island, item: ItemId): number {
-  return Math.max(0, stockCap(state, isl, item) - stockGet(isl.stock, item));
+  if (isBulk(item)) return Math.max(0, tankCap(state, isl) - stockGet(isl.stock, item));
+  return roomIn(dryStock(isl.stock), stockSlots(state, isl), item);
 }
 
 /** 往岛上库存加货，返回实际加入的数量 */
@@ -30,6 +55,29 @@ export function addToStock(state: GameState, isl: Island, item: ItemId, n: numbe
   const k = Math.min(n, stockRoom(state, isl, item));
   if (k > 0) stockAdd(isl.stock, item, k);
   return k;
+}
+
+/** 设施暂存箱能放几个 item（按等级几格，每格一组） */
+export function outputCap(isl: Island, item: ItemId): number {
+  const stacks = IS.outputStacks[isl.level - 1] ?? IS.outputStacks[IS.outputStacks.length - 1];
+  return stacks * stackOf(item);
+}
+
+export function outputRoom(isl: Island, item: ItemId): number {
+  return Math.max(0, outputCap(isl, item) - stockGet(isl.output, item));
+}
+
+/** 岛上能用的（储物箱 + 设施暂存箱）：岛民吃饭先拿储物箱的，不够再拿暂存箱里刚产出来的 */
+export function islandSupply(isl: Island, item: ItemId): number {
+  return stockGet(isl.stock, item) + stockGet(isl.output, item);
+}
+
+/** 从岛上取走一个（先储物箱，后暂存箱），没有返回 false */
+export function takeFromIsland(isl: Island, item: ItemId): boolean {
+  if (stockGet(isl.stock, item) > 0) stockAdd(isl.stock, item, -1);
+  else if (stockGet(isl.output, item) > 0) stockAdd(isl.output, item, -1);
+  else return false;
+  return true;
 }
 
 // ---------------- 背包、货舱：格子 + 堆叠 ----------------

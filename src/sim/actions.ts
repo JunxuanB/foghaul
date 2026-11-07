@@ -515,6 +515,39 @@ function upgradeIsland(state: GameState): Result {
   return OK;
 }
 
+/** 从设施暂存箱拿东西：到背包（放得下多少拿多少）或这座岛的储物箱（格子放得下多少放多少） */
+function collect(state: GameState, to: 'pack' | 'stock', item?: ItemId): Result {
+  const isl = here(state);
+  if (!isl || !isl.owned || !isl.facility) return fail('err.noFacility');
+  const ids = (item ? [item] : (Object.keys(isl.output) as ItemId[])).filter((id) => stockGet(isl.output, id) > 0);
+  if (!ids.length) return fail('err.outputEmpty');
+  let moved = 0;
+  for (const id of ids) {
+    const room = to === 'pack' ? packRoom(state, id) : stockRoom(state, isl, id);
+    const k = Math.min(room, stockGet(isl.output, id));
+    if (k <= 0) continue;
+    stockAdd(isl.output, id, -k);
+    stockAdd(to === 'pack' ? state.player.pack : isl.stock, id, k);
+    moved += k;
+  }
+  if (!moved) return fail(to === 'pack' ? 'err.noRoom' : 'err.stockFull');
+  return OK;
+}
+
+/** 储物箱旁：用水缸里的淡水 + 一个空杯子装一杯，放进背包 */
+function fillCup(state: GameState): Result {
+  const isl = here(state);
+  const r = RECIPES.bottledWater;
+  if (!state.player.recipes.includes('bottledWater')) return fail('err.unknownRecipe');
+  if (!isl || !canUseStock(isl)) return fail('err.cantUseStock');
+  if (!canPay(state, isl, r.inputs as Stock)) return fail('err.missing', { list: stockP(missingCost(state, isl, r.inputs as Stock)) });
+  if (packRoom(state, 'bottledWater') + holdRoom(state, 'bottledWater') < 1) return fail('err.noRoom');
+  pay(state, isl, r.inputs as Stock);
+  giveToPlayer(state, 'bottledWater', 1);
+  advance(state, r.manualMinutes);
+  return OK;
+}
+
 function sleep(state: GameState): Result {
   const isl = here(state);
   if (!isl || !isl.buildings.bed) return fail('err.noBed');
@@ -904,6 +937,13 @@ function run(state: GameState, cmd: Command): Result {
       return OK;
     case 'upgradeIsland':
       return upgradeIsland(state);
+    case 'collect':
+      return collect(state, cmd.to, cmd.item);
+    case 'fillCup':
+      return fillCup(state);
+    case 'ackReport':
+      if (state.report) state.report.seen = true;
+      return OK;
     case 'seeIntro':
       if (!state.intros.includes(cmd.kind)) state.intros.push(cmd.kind);
       return OK;

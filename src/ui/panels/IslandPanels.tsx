@@ -10,15 +10,16 @@ import { t } from '../../i18n';
 import { buildCost, canUseStock, here } from '../../sim/actions';
 import { canLevelUp, islandRate, upgradeCostOf } from '../../sim/economy';
 import { charOf, facilityName, facilitySprite } from '../../sim/interact';
-import { canPay, stockCap } from '../../sim/inventory';
+import { canPay, isBulk, tankCap } from '../../sim/inventory';
 import { residentsOf, workersAt } from '../../sim/people';
 import type { Facility } from '../../sim/types';
 import { useGame, useStore } from '../../store/hooks';
 import { Bowls, Card, label, Chip, CostGrid, Icon, Meter, Picture, Portrait, Stars } from '../components/Kit';
 import { Panel, Soon } from './Panel';
-import { FocusActions, FocusStatus, PackHoldBody, useFocus } from './Views';
+import { FocusActions, FocusStatus, PackHoldBody, SlotGrid, useFocus } from './Views';
 
 const E = BALANCE.economy;
+const IS = BALANCE.inventory.island;
 
 /** 木筏（停在码头边）：货舱 ↔ 背包、全部卸到仓库；改造货舱 */
 export function RaftPanel() {
@@ -136,6 +137,9 @@ export function FacilityPanel() {
   const now = E.levels[isl.level - 1];
   const next = E.levels[isl.level];
   const seats = Math.max(now.people, people.length);
+  const kinds = fac.kind === 'produce' ? 1 : Object.keys(RECIPES[fac.recipe].outputs).length;
+  const boxSlots = (IS.outputStacks[isl.level - 1] ?? 1) * kinds;
+  const boxHas = Object.values(isl.output).some((v) => (v ?? 0) > 0);
   const tabs = [
     { id: 'main', label: t('ui.tabFacility') },
     { id: 'train', label: t('ui.tabTraining'), soon: true },
@@ -189,8 +193,27 @@ export function FacilityPanel() {
                   </span>
                 )}
                 <b className={'v-rate' + (r.rate > 0 ? '' : ' off')}>{t('ui.perHourShort', { n: Math.round(r.rate * 10) / 10 })}</b>
-                {product && <Meter value={isl.stock[product] ?? 0} max={stockCap(g, isl, product)} icon="ui_stock" />}
               </div>
+              {/* 产物去哪：淡水直接进水缸；其他进设施旁的暂存箱，满了停工，玩家决定拿多少进仓库 */}
+              {product && isBulk(product) ? (
+                <div className="v-box">
+                  <span className="u-label">{t('ui.tank')}</span>
+                  <Meter value={isl.stock[product] ?? 0} max={tankCap(g, isl)} icon="ui_tank" />
+                </div>
+              ) : (
+                <div className="v-box">
+                  <span className="u-label">{t('ui.outputBox')}</span>
+                  <SlotGrid stock={isl.output} slots={boxSlots} cols={boxSlots} where="stock" onPick={(id) => store.dispatch({ t: 'collect', to: 'pack', item: id })} />
+                  <span className="v-box-btns">
+                    <button className="u-btn sec" disabled={!boxHas} onClick={() => store.dispatch({ t: 'collect', to: 'pack' })}>
+                      {t('ui.btnToPack')}
+                    </button>
+                    <button className="u-btn sec" disabled={!boxHas} onClick={() => store.dispatch({ t: 'collect', to: 'stock' })}>
+                      {t('ui.collectAll')}
+                    </button>
+                  </span>
+                </div>
+              )}
             </Card>
             {/* 第二眼：谁在干活、空位 */}
             <Card title={t('ui.workers')} icon="ui_person" right={<span className="u-dim">{`${workers.length}/${now.people}`}</span>}>
@@ -216,7 +239,8 @@ export function FacilityPanel() {
                   <div className="v-gains">
                     <span className="u-label">{t('ui.gain')}</span>
                     <Gain icon={product ?? 'ui_clock'} label={t('ui.gainRate')} a={'×' + now.mult} b={'×' + next.mult} />
-                    <Gain icon="ui_stock" label={t('ui.gainCap')} a={now.cap} b={next.cap} />
+                    <Gain icon="ui_stock" label={t('ui.gainCap')} a={IS.slots[isl.level - 1]} b={IS.slots[isl.level]} />
+                    <Gain icon="ui_tank" label={t('ui.gainTank')} a={IS.tank[isl.level - 1]} b={IS.tank[isl.level]} />
                     <Gain icon="ui_person" label={t('ui.gainPeople')} a={now.people} b={next.people} />
                   </div>
                 </div>
