@@ -56,7 +56,7 @@ i18n/     中英词典
 | `lastFight` | 最近一次海上战斗（界面显示一张小卡片） |
 | `pendingCrate.x / y` | 漂流物在海面上的位置 |
 
-存档：`sim/save.ts`，`SAVE_VERSION = 3`，键 `foghaul2d.save.v1`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
+存档：`sim/save.ts`，`SAVE_VERSION = 4`，键 `foghaul2d.save.v1`（v4：每座岛都长树和草药）。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
 
 界面临时状态（不存档）在 `store/view.ts` 的 `ViewState`：开着的面板、选中的物体、按键提示、初见介绍、正在做的动作、快捷栏选中格、“+1”、调试用的画面时刻。
 
@@ -72,6 +72,8 @@ i18n/     中英词典
 - **物体定义**：`config/buildings.ts` 的 `OBJ_DEFS`（精灵名 → 种类、底座、互动范围）。新物体先在这里登记。
 - **一座岛上的全部物体**：`sim/interact.ts` 的 `objectsOn(state, island)` = 模板里固定的 + 今天的采集点（`nodeObject`）+ 跟着存档变的（`stateObjects`：站在岛上的人 `npc@<人的 id>`、灯塔或地基、加入网络后的工作台和储物箱、请求板）。规则层和画面层都只用这一个函数。
 - 画面层里，模板固定物体的底座在 Raster 的可走遮罩里；其余物体的底座每帧作为 `blockers` 单独挡路。
+- 灯光、火苗、设施状态这些“画在物体上的东西”遍历 `this.objs`（全部物体），**不要只遍历 `this.L.objects`**（只有模板里固定的），否则跟着存档出现的东西（石头岛修好的灯塔）不会亮。
+- 采集点：每座岛按模板的 `forage` 区域和 `forageCounts`（通用模板按群系，见 `config/maps.ts` 的 `BIOME_FORAGE`）长树和草药；渔场群系的通用模板有浅滩钓点（`GENERIC_SHOAL`）。
 
 ## 5. 碰撞
 
@@ -151,7 +153,18 @@ i18n/     中英词典
 
 ## 10. 背包和仓库
 
+- **东西放到哪**：`giveToPlayer` 默认先放背包，满了放货舱，再满了放这座岛的仓库（网络里的岛）。只有“运货”的补给才点名放货舱。
+- **货舱**：海上按 Tab 打开背包和货舱两栏（`PackHold`），可以互相搬；在岛上货舱能看不能搬，要走到码头边的**木筏**（`raft@<岛>`，人在哪座岛就停在哪座岛的码头边）旁按 E，在木筏面板里装卸、全部卸到岛上仓库、加固货舱。规则层：涉及货舱的 `transfer` 和 `build holdUpgrade` 都要在木筏旁（`objectFor`）。
+- **仓库里的东西**：储物箱面板按清单显示“数量 / 上限”，能吃喝的有“吃 / 喝”按钮（`consume from: 'stock'`，要在储物箱旁）。
+
 `sim/inventory.ts`：背包 `BALANCE.inventory.packCap` 格、货舱 `player.holdCap` 格；每格一种东西，堆叠上限 `stackOf()`（能吃喝用的 10，其他 20）；零件不占格。`roomIn()` 算还能放多少，`slotView()` 把容器排成格子给界面画。岛上仓库不按格子：每种物品上限 `stockCap()`。
+
+## 10.5 设施和岛的升级
+
+- 加入网络、有了工作（`island.facility`）的岛，在模板的 `slots.facility` 位置出现设施建筑（`facility@<岛>`）。精灵按产物或配方选（`config/buildings.ts` 的 `FACILITY_SPRITE`）。
+- 头顶：进度条 = `island.prodAcc` 的小数部分；停工（`islandRate` 为 0 或犯困）时换成闪烁的“!”。有火的设施（蒸馏棚、烤炉）夜里发光。
+- 设施面板（`ui/panels/IslandPanels.tsx`）：产出（`islandRate`）、产物库存、工人、闲着的人、上一顿、升级。
+- **升级**：`economy.ts` 吃饭时只累计 `mealStreak`，够了写一条日志；玩家在设施旁发 `{ t: 'upgradeIsland' }`，规则层检查连续吃饱、扣 `BALANCE.economy.upgradeCost` 的材料，再 `levelUp`（灯塔照得更远）。不要再在吃饭里自动升级。
 
 ## 11. 引导
 

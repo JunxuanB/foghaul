@@ -35,7 +35,8 @@ function ensure(s: GameState, need: Stock): void {
     const id = k as ItemId;
     const lack = (v ?? 0) - carried(s, id);
     if (lack <= 0) continue;
-    const left = giveToPlayer(s, id, lack);
+    // 补给的是要运的货：放货舱
+    const left = giveToPlayer(s, id, lack, 'hold');
     // 装不下的直接塞进背包（脚本作弊，不受容量限制）
     if (left > 0) stockAdd(s.player.pack, id, left);
   }

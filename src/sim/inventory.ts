@@ -113,8 +113,11 @@ export function takeCarried(state: GameState, item: ItemId, n: number): number {
   return n - left;
 }
 
-/** 给玩家物品：先放偏好的位置，满了放另一处，再满了放到所在岛上，返回丢失的数量 */
-export function giveToPlayer(state: GameState, item: ItemId, n: number, prefer: 'pack' | 'hold' = 'hold'): number {
+/**
+ * 给玩家物品：先放偏好的位置（默认随身背包，玩家马上看得到），满了放另一处，再满了放到所在岛上，返回丢失的数量。
+ * 2D 版里自己捞到、捕到、捡到的东西都先进背包；只有运货（交付奖励之类）才会直接点名放货舱。
+ */
+export function giveToPlayer(state: GameState, item: ItemId, n: number, prefer: 'pack' | 'hold' = 'pack'): number {
   const def = ITEMS[item];
   let left = n;
   const order: ('pack' | 'hold')[] = prefer === 'hold' ? ['hold', 'pack'] : ['pack', 'hold'];

@@ -869,3 +869,106 @@ export function spFloat(): G {
   g.line(1, 2, 7, 5, 'w1');
   return g.outline();
 }
+
+// ---------------------------------------------------------------- 设施建筑
+
+/** 蒸馏棚：罐头盒蒸馏器——火上一口锅、一根铜管、一只接水的桶 */
+export function spDistiller(): G {
+  const g = new G(34, 30);
+  g.ell(17, 28, 16, 2, 'z');
+  // 棚顶和柱子
+  g.cyl(2, 6, 2, 22, 'w', [1, 0]);
+  g.cyl(30, 6, 2, 22, 'w', [1, 0]);
+  for (let y = 2; y < 7; y++) g.rect(1 + (6 - y), y, 32 - (6 - y) * 2, 1, y % 2 ? 'r2' : 'r1');
+  g.rect(1, 6, 32, 1, 'r0');
+  // 锅和火
+  g.ellS(11, 19, 6, 4.5, 'm', { lo: 0 });
+  g.rect(6, 14, 10, 2, 'm2');
+  g.ellS(11, 25, 5, 1.6, 's', { lo: 1 });
+  g.set(10, 24, 'y1');
+  g.set(12, 24, 'y0');
+  // 铜管
+  g.line(16, 15, 22, 12, 'x2');
+  g.line(22, 12, 24, 18, 'x2');
+  g.line(16, 16, 22, 13, 'x1');
+  // 桶
+  g.ellS(25, 23, 4, 4.5, 'w');
+  g.ell(25, 19, 3, 1, 'g1');
+  g.rect(21, 22, 8, 1, 'm1');
+  g.meta = { flame: [11, 24] };
+  return g.outline();
+}
+
+/** 烤鱼架（从设计稿 B 移植） */
+export function spGrill(): G {
+  const g = new G(22, 18);
+  g.cyl(2, 2, 2, 15, 'w', [2, 0]);
+  g.cyl(18, 2, 2, 15, 'w', [2, 0]);
+  g.rect(1, 2, 20, 1, 'm0');
+  g.rect(1, 1, 20, 1, 'm1');
+  for (const [x, mat] of [[6, 'g'], [10, 'w'], [14, 'w']] as [number, string][]) {
+    g.set(x + 1, 3, 'm0');
+    g.rect(x, 4, 3, 5, mat + '1');
+    g.rect(x + 2, 4, 1, 5, mat + '0');
+    g.set(x + 1, 9, mat + '0');
+    g.set(x, 5, mat === 'g' ? 'g2' : 'w3');
+  }
+  return g.outline();
+}
+
+/** 麦田：一小块地，几排麦子 */
+export function spWheatPatch(): G {
+  const g = new G(36, 20);
+  g.ell(18, 18, 17, 2, 'z');
+  for (let y = 8; y < 18; y++) for (let x = 1; x < 35; x++) g.set(x, y, (y - 8) % 4 < 2 ? 'so1' : 'so0');
+  for (let r = 0; r < 3; r++)
+    for (let x = 3; x < 34; x += 4) {
+      const by = 10 + r * 3;
+      g.line(x, by, x, by - 5, 'q0');
+      g.set(x, by - 6, 'q2');
+      g.set(x - 1, by - 5, 'q1');
+      g.set(x + 1, by - 5, 'q1');
+    }
+  return g.outline();
+}
+
+/** 药圃：围起来的一小块，种着几丛草药 */
+export function spHerbGarden(): G {
+  const g = new G(32, 20);
+  g.ell(16, 18, 15, 2, 'z');
+  for (let y = 9; y < 18; y++) for (let x = 2; x < 30; x++) g.set(x, y, 'so0');
+  for (const [cx, cy] of [[8, 12], [16, 11], [24, 12], [12, 15], [20, 15]]) {
+    g.ellS(cx, cy, 3.5, 3, 'l', { tex: 1.6, amp: 0.5, seed: cx + cy, lo: 1 });
+    g.set(cx, cy - 2, 'fw');
+  }
+  g.rect(1, 17, 30, 1, 'w1');
+  g.rect(1, 8, 1, 10, 'w1');
+  g.rect(30, 8, 1, 10, 'w1');
+  return g.outline();
+}
+
+/** 烤炉：石头砌的圆顶炉，口里有火 */
+export function spOven(): G {
+  const g = new G(28, 24);
+  g.ell(14, 22, 13, 2, 'z');
+  g.ellS(14, 14, 11, 9, 's', { tex: 2, amp: 0.5, seed: 77 });
+  g.rect(3, 14, 22, 8, 's1');
+  g.ellS(14, 18, 4, 3.5, 'a', { hi: 0 });
+  g.set(13, 19, 'y1');
+  g.set(15, 19, 'y0');
+  g.rect(18, 2, 4, 6, 's2');
+  g.meta = { flame: [14, 19] };
+  return g.outline();
+}
+
+/** 晒盐池：浅浅的方池，边上堆着白色的盐 */
+export function spSaltPan(): G {
+  const g = new G(32, 16);
+  g.ell(16, 14, 15, 1.8, 'z');
+  g.rect(1, 5, 30, 9, 'w1');
+  g.rect(3, 7, 26, 5, 'g1');
+  g.rect(3, 7, 26, 1, 'g2');
+  g.ellS(24, 6, 4, 2.5, 'n', { hi: 2 });
+  g.ellS(8, 6, 3, 2, 'n', { hi: 2 });
+  return g.outline();
+}

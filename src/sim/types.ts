@@ -306,6 +306,7 @@ export type Command =
   | { t: 'seenRecipes' }
   | { t: 'ackRecipes' }
   | { t: 'seeIntro'; kind: string }
+  | { t: 'upgradeIsland' }
   | { t: 'ackGuide'; id: 'vitals' };
 
 export interface Result {

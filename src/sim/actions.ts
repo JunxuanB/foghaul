@@ -5,7 +5,7 @@ import { ENDING_LINES, FLIGHT_LINES } from '../config/text';
 import { ISLANDS } from '../config/world';
 import { advance } from './advance';
 import { canSleepNow, untilMorning } from './clock';
-import { peopleCap, relieve } from './economy';
+import { canLevelUp, levelUp, peopleCap, relieve, upgradeCostOf } from './economy';
 import { bureauHourly, exportGoods, upgradeCost } from './endgame';
 import {
   addToStock,
@@ -223,10 +223,11 @@ function fishSea(state: GameState): Result {
 // ---------------------------------------------------------------- 主岛
 
 function gather(state: GameState, what: 'branch' | 'chop' | 'shoreFish' | 'herb'): Result {
+  // 2D：任何岛上都能采（树、草药丛、浅滩钓点按岛的种类长在各岛上），位置校验在 positionError
   const isl = here(state);
-  if (!isl || isl.kind !== 'home') return fail('err.homeOnly');
+  if (!isl) return fail('err.notDocked');
   const lumber = state.people.find((x) => x.role === 'lumberjack')?.active;
-  // 采集到的东西默认放进背包，满了放货舱，再满了放主岛仓库
+  // 采集到的东西默认放进背包，满了放货舱，再满了放这座岛的仓库（网络里的岛）
   const give = (item: ItemId, n: number) => n - giveToPlayer(state, item, n, 'pack');
   // 2D：采的是人物身边那一棵树 / 那一丛草药，采几次就采完（没有地图的岛不会走到这里）
   const node = mapHere(state) ? nearNode(state, what === 'herb' ? 'herb' : 'tree') : null;
@@ -497,6 +498,20 @@ function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad
   if (what === 'lighthouse') lightFrom(state, isl);
   say(state, 'log.built.' + what, { isl: islandM(isl.id) }, 'got');
   advance(state, BALANCE.buildings[what].minutes);
+  return OK;
+}
+
+/** 2D：在设施旁升级这座岛。条件：连续吃饱够了；花材料（从背包、货舱、岛上仓库一起扣） */
+function upgradeIsland(state: GameState): Result {
+  const isl = here(state);
+  if (!isl || !canLevelUp(isl)) return fail('err.cantUpgrade');
+  const need = BALANCE.economy.mealsToUpgrade;
+  if (isl.mealStreak < need) return fail('err.needMeals', { have: isl.mealStreak, n: need });
+  const cost = upgradeCostOf(isl)!;
+  if (!canPay(state, isl, cost)) return fail('err.missing', { list: stockP(missingCost(state, isl, cost)) });
+  pay(state, isl, cost);
+  levelUp(state, isl);
+  advance(state, BALANCE.economy.upgradeMinutes);
   return OK;
 }
 
@@ -887,6 +902,8 @@ function run(state: GameState, cmd: Command): Result {
     case 'dismissTip':
       if (!state.tips.includes(cmd.id)) state.tips.push(cmd.id);
       return OK;
+    case 'upgradeIsland':
+      return upgradeIsland(state);
     case 'seeIntro':
       if (!state.intros.includes(cmd.kind)) state.intros.push(cmd.kind);
       return OK;

@@ -9,7 +9,7 @@ import { islandM, m } from './msg';
 import { canDo, facilityRole, isHungry, residentsOf, roleOf, workersAt } from './people';
 import { gainPersonXp, levelInfo, playerLevel } from './progression';
 import { chance, rand } from './rng';
-import type { GameState, Island, MealState } from './types';
+import type { GameState, Island, MealState, Stock } from './types';
 import { stockAdd, stockGet } from './util';
 
 const E = BALANCE.economy;
@@ -223,25 +223,33 @@ function mealAt(state: GameState, isl: Island, scheduled: boolean): void {
     }
     if (st === 'full') {
       isl.mealStreak++;
-      if (
-        isl.mealStreak >= E.mealsToUpgrade &&
-        isl.level < 3 &&
-        (isl.kind === 'passenger' || isl.kind === 'native') &&
-        isl.owned
-      ) {
-        isl.level++;
-        isl.mealStreak = 0;
-        // 岛升级后，灯塔照得更远
-        if (isl.buildings.lighthouse) {
-          lightFrom(state, isl);
-          say(state, 'log.lightGrows', { isl: islandM(isl.id) }, 'hint');
-        }
-        say(state, 'log.islandUp', { isl: islandM(isl.id), lv: isl.level, next: m(isl.level === 2 ? 'levelup.want2' : 'levelup.want3') }, 'got');
-      }
+      // 2D：吃饱够了只是“可以升级”，要玩家到设施旁手动升级（actions.ts 的 upgradeIsland）
+      if (isl.mealStreak === E.mealsToUpgrade && canLevelUp(isl)) say(state, 'log.canUpgrade', { isl: islandM(isl.id) }, 'hint');
     } else {
       isl.mealStreak = 0;
     }
   }
+}
+
+/** 这座岛能不能升级（不看吃饭和材料）：网络里的乘客岛 / 原住民岛，没到最高级 */
+export function canLevelUp(isl: Island): boolean {
+  return isl.owned && isl.level < E.levels.length && (isl.kind === 'passenger' || isl.kind === 'native');
+}
+
+/** 升级到下一级要的材料 */
+export function upgradeCostOf(isl: Island): Stock | null {
+  return canLevelUp(isl) ? ((E.upgradeCost[isl.level - 1] ?? null) as Stock | null) : null;
+}
+
+/** 升级：等级 +1，连续吃饱清零；灯塔照得更远 */
+export function levelUp(state: GameState, isl: Island): void {
+  isl.level++;
+  isl.mealStreak = 0;
+  if (isl.buildings.lighthouse) {
+    lightFrom(state, isl);
+    say(state, 'log.lightGrows', { isl: islandM(isl.id) }, 'hint');
+  }
+  say(state, 'log.islandUp', { isl: islandM(isl.id), lv: isl.level, next: m(isl.level === 2 ? 'levelup.want2' : 'levelup.want3') }, 'got');
 }
 
 // ---------------- 犯困与生育 ----------------

@@ -2,7 +2,7 @@
 // 每座岛都有地图（专门模板或通用模板，见 world/templates.ts）。岛上的东西分三类：
 // 模板里固定的、今天的采集点（sim/forage.ts）、跟着存档变的（人、灯塔 / 地基、工作台、储物箱、请求板）。
 import { BALANCE } from '../config/balance';
-import { OBJ_DEFS, type ObjKind, type RelRect } from '../config/buildings';
+import { FACILITY_SPRITE, OBJ_DEFS, type ObjKind, type RelRect } from '../config/buildings';
 import type { Role } from '../config/recipes';
 import { ISLANDS } from '../config/world';
 import { heightAt, layout, rectDist, type WorldObj } from '../world/island';
@@ -12,7 +12,7 @@ import { nodesOn } from './forage';
 import { needsDone } from './inventory';
 import { m, type Msg } from './msg';
 import { roleOf } from './people';
-import type { Command, ForageNode, GameState, Person, Walk } from './types';
+import type { Command, Facility, ForageNode, GameState, Person, Walk } from './types';
 import { findIsland } from './util';
 
 /** 当前所在岛的地图，并且人物在这张图上 */
@@ -54,8 +54,12 @@ function stateObjects(state: GameState, islandId: string): WorldObj[] {
   const t = templateFor(islandId);
   const S = t?.slots;
   const isl = findIsland(state, islandId);
-  if (!S || !isl) return [];
+  if (!isl) return [];
   const out: WorldObj[] = [];
+  // 木筏停在人所在的那座岛的码头边
+  const L = layout(islandId, state.seed);
+  if (state.player.hasRaft && state.player.at === islandId && L.raftAt) out.push(makeObj('raft@' + islandId, 'raft', L.raftAt[0], L.raftAt[1]));
+  if (!S) return out;
   if (S.lighthouse) {
     const [x, y] = S.lighthouse;
     out.push(makeObj('lighthouse@' + islandId, isl.buildings.lighthouse ? 'light' : 'lhBase', x, y, 'lighthouse'));
@@ -70,9 +74,20 @@ function stateObjects(state: GameState, islandId: string): WorldObj[] {
     });
   }
   if (isl.owned && S.workbench) out.push(makeObj('workbench@' + islandId, 'workbench', ...S.workbench));
+  if (isl.owned && S.facility && isl.facility) out.push(makeObj('facility@' + islandId, facilitySprite(isl.facility), ...S.facility, 'facility', 'facility'));
   if (isl.owned && S.chest) out.push(makeObj('chest@' + islandId, 'chest', ...S.chest));
   if (S.board) out.push(makeObj('board@' + islandId, 'board', ...S.board));
   return out;
+}
+
+/** 设施建筑的精灵：按它生产或加工的东西画（config/buildings.ts 的 FACILITY_SPRITE） */
+export function facilitySprite(f: Facility): string {
+  const key = f.kind === 'produce' ? f.item : f.recipe;
+  return FACILITY_SPRITE[key] ?? FACILITY_SPRITE.default;
+}
+
+export function facilityName(f: Facility): Msg {
+  return f.kind === 'produce' ? m('fac.produce', { item: m('item.' + f.item) }) : m('fac.process', { recipe: m('recipe.' + f.recipe) });
 }
 
 /** 一座岛上的全部物体：模板里固定的 + 今天的采集点 + 跟着存档变的 */
@@ -122,6 +137,8 @@ export function objectFor(cmd: Command): ObjKind | null {
     case 'craft':
       return 'workbench';
     case 'transfer':
+      // 涉及货舱的在木筏旁边装卸（包括卸到岛上仓库），只在背包和仓库之间的在储物箱旁边
+      if (cmd.from === 'hold' || cmd.to === 'hold') return 'raft';
       return cmd.from === 'stock' || cmd.to === 'stock' ? 'chest' : null;
     case 'consume':
       return cmd.from === 'stock' ? 'chest' : null;
@@ -136,7 +153,9 @@ export function objectFor(cmd: Command): ObjKind | null {
     case 'deliver':
       return 'npc';
     case 'build':
-      return cmd.what === 'lighthouse' ? 'lighthouse' : cmd.what === 'holdUpgrade' ? 'workbench' : null;
+      return cmd.what === 'lighthouse' ? 'lighthouse' : cmd.what === 'holdUpgrade' ? 'raft' : null;
+    case 'upgradeIsland':
+      return 'facility';
     default:
       return null;
   }
@@ -267,6 +286,12 @@ export function interactInfo(state: GameState, o: WorldObj): InteractInfo | null
     }
     case 'board':
       return { label: m('act.board'), ok: false, reason: m('reason.nextStage') };
+    case 'raft':
+      return { label: m('act.raft'), ok: true };
+    case 'facility': {
+      const isl = findIsland(state, state.player.at);
+      return { label: m('act.facility', { what: isl?.facility ? facilityName(isl.facility) : m('none') }), ok: true };
+    }
     default:
       return null;
   }

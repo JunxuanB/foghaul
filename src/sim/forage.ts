@@ -2,8 +2,9 @@
 // 只影响玩家手动采集；岛上设施的生产（伐木场等）不受影响。
 // 位置候选来自 world/island.ts 的 forageSpots（纯函数），今天长在哪几个由存档的随机数挑。
 import { BALANCE } from '../config/balance';
-import { MAPS } from '../config/maps';
+import { ISLANDS } from '../config/world';
 import { forageSpots } from '../world/island';
+import { templateFor } from '../world/templates';
 import { randInt } from './rng';
 import type { ForageKind, ForageNode, GameState } from './types';
 
@@ -14,12 +15,20 @@ export function nodesOn(state: GameState, islandId: string): ForageNode[] {
 }
 
 /** 在某座岛上新长出最多 n 个 kind，返回实际长出的数量 */
+/** 一座岛上某种采集点的数量：模板写了就用模板的，否则用 BALANCE.forage 的（主岛） */
+export function forageCounts(islandId: string, kind: ForageKind): { start: number; perDay: number; max: number } {
+  const t = templateFor(islandId);
+  return t?.forageCounts?.[kind] ?? BALANCE.forage[kind];
+}
+
 export function plantForage(state: GameState, islandId: string, kind: ForageKind, n: number): number {
-  if (!MAPS[islandId]) return 0;
+  const t = templateFor(islandId);
+  if (!t || !t.forage[kind].length) return 0;
   const B = BALANCE.forage;
   const list = (state.forage[islandId] ??= []);
   const alive = list.filter((x) => x.kind === kind && x.left > 0).length;
-  n = Math.min(n, B[kind].max - alive);
+  n = Math.min(n, forageCounts(islandId, kind).max - alive);
+  if (n <= 0) return 0;
   const spots = forageSpots(islandId, state.seed, kind);
   const minGap = Math.max(B.spacing.tree, B.spacing[kind]);
   const w = state.walk;
@@ -43,15 +52,15 @@ export function plantForage(state: GameState, islandId: string, kind: ForageKind
   return made;
 }
 
-/** 开局：每座有地图的岛长出初始的树和草药 */
+/** 开局：每座岛长出初始的树和草药（岛还没出现也先长好，位置只看这座岛自己的地图） */
 export function initForage(state: GameState): void {
-  for (const id of Object.keys(MAPS)) for (const k of KINDS) plantForage(state, id, k, BALANCE.forage[k].start);
+  for (const def of ISLANDS) for (const k of KINDS) plantForage(state, def.id, k, forageCounts(def.id, k).start);
 }
 
 /** 每天早上：清掉采完的（树桩、空草丛），再长出新的 */
 export function dailyForage(state: GameState): void {
   for (const id of Object.keys(state.forage)) {
     state.forage[id] = state.forage[id].filter((x) => x.left > 0);
-    for (const k of KINDS) plantForage(state, id, k, BALANCE.forage[k].perDay);
+    for (const k of KINDS) plantForage(state, id, k, forageCounts(id, k).perDay);
   }
 }

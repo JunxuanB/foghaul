@@ -2,8 +2,8 @@ import { BALANCE } from '../config/balance';
 import type { GameState } from './types';
 import { initForage } from './forage';
 
-/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点。v3：木筏在海面上的位置、最近一次战斗 */
-export const SAVE_VERSION = 3;
+/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点。v3：木筏在海面上的位置、最近一次战斗。v4：每座岛都有树和草药 */
+export const SAVE_VERSION = 4;
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -38,6 +38,11 @@ function migrate(s: GameState): GameState | null {
     s.raft = { x: s.player.x * T + T / 2, y: s.player.y * T + T / 2 };
     s.lastFight = null;
     s.version = 3;
+  }
+  // v3 → v4：其他岛也长出树和草药（已经有的岛不重复长）
+  if (s.version === 3) {
+    initForage(s);
+    s.version = 4;
   }
   if (s.version === SAVE_VERSION) return s;
   return null;

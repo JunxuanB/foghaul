@@ -4,7 +4,7 @@
 import Phaser from 'phaser';
 import { allSprites, mkCanvas, px } from '../../art/draw';
 import { hash } from '../../art/noise';
-import { DAY } from '../../art/palette';
+import { DAY, type Pal } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
 import { ANIM, LIGHTS, VIEW } from '../../config/visual';
@@ -13,6 +13,7 @@ import { carried, slotView } from '../../sim/inventory';
 import { interactInfo, objectsOn, personOfObj } from '../../sim/interact';
 import type { Command, Facing, GameState } from '../../sim/types';
 import { island } from '../../sim/util';
+import { islandRate } from '../../sim/economy';
 import type { Prompt } from '../../store/view';
 import { canStand, FEET, layout, raster, rectDist, type Layout, type Raster, type Rect, type WorldObj } from '../../world/island';
 import { moveDir, type Action } from '../input/keys';
@@ -56,7 +57,6 @@ export class IslandScene extends WorldScene {
   private flames = new Map<string, { tex: Phaser.Textures.CanvasTexture; img: Img }>();
   private glows = new Map<string, Img>();
   private hl!: Img;
-  private raft: Img | null = null;
   private under!: FxLayer;
   private over!: FxLayer;
   private fog!: FxLayer;
@@ -87,7 +87,6 @@ export class IslandScene extends WorldScene {
     this.objImgs = new Map();
     this.flames = new Map();
     this.glows = new Map();
-    this.raft = null;
     this.pending = null;
     this.shaking = null;
     this.parts = new Particles();
@@ -173,6 +172,10 @@ export class IslandScene extends WorldScene {
         return v.set({ panel: 'lighthouse' });
       case 'wreck':
         return v.set({ panel: 'wreck' });
+      case 'raft':
+        return v.set({ panel: 'raft' });
+      case 'facility':
+        return v.set({ panel: 'facility' });
       case 'npc':
         return v.set({ panel: 'talk', talkTo: personOfObj(this.state, o.id)?.id ?? null });
       case 'dock':
@@ -502,13 +505,36 @@ export class IslandScene extends WorldScene {
   }
 
   private updateObjects(): void {
-    const s = this.state;
     this.syncObjects();
-    if (s.player.hasRaft && this.L.raftAt && !this.raft) {
-      this.raft = this.add.image(this.L.raftAt[0], this.L.raftAt[1], 'raft').setOrigin(0.5, 1).setDepth(this.L.raftAt[1] - 40);
+    // 停在码头边的木筏：在水里上下轻轻浮动，画在码头后面
+    const raft = this.raftObj();
+    const img = raft ? this.objImgs.get(raft.id) : undefined;
+    if (raft && img) img.setY(raft.y + 1 + Math.round(Math.sin(this.t * 1.8) * 1.1)).setDepth(raft.y - 40);
+  }
+
+  private raftObj(): WorldObj | undefined {
+    return this.objs.find((o) => o.kind === 'raft');
+  }
+
+  /** 设施头顶：进度条（这一批做了多少），停工时一个“!”（原因在设施面板里） */
+  private drawFacilityStatus(c: CanvasRenderingContext2D, P: Pal, x: number, y: number): void {
+    const isl = this.state.islands.find((i) => i.id === this.isl);
+    if (!isl) return;
+    const r = islandRate(this.state, isl);
+    if (r.rate <= 0 || isl.sleepy) {
+      const bang = this.textures.get('ui_bang').getSourceImage() as HTMLCanvasElement;
+      if (Math.floor(this.t * 2) % 2) c.drawImage(bang, Math.round(x - bang.width / 2), Math.round(y - bang.height));
+      return;
     }
-    if (this.raft && this.L.raftAt) this.raft.setY(this.L.raftAt[1] + Math.round(Math.sin(this.t * 1.8) * 1.1));
-    if (this.raft) this.raft.setVisible(s.player.hasRaft);
+    const w = 16;
+    const p = Math.max(0, Math.min(1, isl.prodAcc % 1));
+    px(c, P, 'o', x - w / 2 - 1, y - 4, w + 2, 5);
+    px(c, P, 'i0', x - w / 2, y - 3, w, 3);
+    const fw = Math.round(w * p);
+    if (fw > 0) {
+      px(c, P, 'y0', x - w / 2, y - 3, fw, 3);
+      px(c, P, 'y1', x - w / 2, y - 3, fw, 1);
+    }
   }
 
   /** 篝火火苗（每帧重画的小画布）和小屋亮着的窗（固定的一张图），深度紧贴在物体上面 */
@@ -632,8 +658,9 @@ export class IslandScene extends WorldScene {
         px(u, P, 'e3', bx - cx, by - 1 + dip - cy, 2, 1);
       }
     }
-    if (this.raft && this.L.raftAt) {
-      const [rx, ry] = this.L.raftAt;
+    const ro = this.raftObj();
+    if (ro) {
+      const [rx, ry] = [ro.x, ro.y];
       const bob = Math.round(Math.sin(t * 1.8) * 1.1);
       const rp = Math.floor(t * 2) % 2;
       px(u, P, 'foam', rx - 21 + rp * 2 - cx, ry + bob - cy, 4, 1);
@@ -649,7 +676,8 @@ export class IslandScene extends WorldScene {
     const beams: Beam[] = [];
     const Sp = allSprites();
     const k = Math.floor(t * ANIM.fireFps);
-    for (const o of this.L.objects) {
+    // 所有物体（固定的和跟着存档出现的，比如石头岛修好的灯塔）都可能发光
+    for (const o of this.objs) {
       const g = Sp[o.sprite];
       if (!g) continue;
       const ox = o.x - (g.w >> 1) - cx;
@@ -680,12 +708,17 @@ export class IslandScene extends WorldScene {
         spots.push([ox + lx, oy + ly, LIGHTS.lighthouse * strength]);
         if (strength >= LIGHTS.beam.minStrength)
           beams.push([ox + lx, oy + ly, LIGHTS.beam.length * strength, (t / LIGHTS.beam.secondsPerTurn) * Math.PI * 2, LIGHTS.beam.halfAngle]);
+      } else if (o.kind === 'raft') {
+        const [lx, ly] = g.meta.lantern as [number, number];
+        spots.push([ox + lx, oy + ly, LIGHTS.lantern * strength]);
+      } else if (o.kind === 'facility') {
+        // 设施：有火的（蒸馏器、烤炉）发光；头顶一根进度条，停工时换成“!”
+        if (g.meta.flame) {
+          const [fx, fy] = g.meta.flame as [number, number];
+          spots.push([ox + fx, oy + fy, LIGHTS.doorLamp * strength]);
+        }
+        this.drawFacilityStatus(c, P, o.x - cx, oy - 4);
       }
-    }
-    if (this.raft && this.L.raftAt) {
-      const g = Sp.raft;
-      const [lx, ly] = g.meta.lantern as [number, number];
-      spots.push([this.L.raftAt[0] - (g.w >> 1) + lx - cx, this.L.raftAt[1] - g.h + 1 + ly - cy, LIGHTS.lantern * strength]);
     }
     const gull = Sp[Math.floor(t * ANIM.gullFps) % 2 ? 'gull1' : 'gull2'];
     if (gull) {

@@ -255,3 +255,7 @@ button.u-slot:hover { border-color: var(--c5); }
 .fight .res { margin-top: calc(var(--k) * 1px); font-size: calc(var(--k) * 5px); }
 .sel-card { display: flex; align-items: center; gap: calc(var(--k) * 4px); font-size: calc(var(--k) * 5px); padding: calc(var(--k) * 2px) calc(var(--k) * 4px); }
 .sel-card .keyhint { display: flex; align-items: center; gap: calc(var(--k) * 1.5px); color: var(--c6); }
+
+/* 仓库一行：取出 + 吃喝 */
+.stock-line { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--k) * 2px); align-items: center; }
+.stock-line .eat { font-size: calc(var(--k) * 5px); padding: calc(var(--k) * 0.5px) calc(var(--k) * 4px); }

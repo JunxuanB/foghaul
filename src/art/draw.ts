@@ -84,6 +84,12 @@ export function allSprites(): Record<string, G> {
     shoal: S.spShoal(),
     sign: S.spSign(),
     lhBase: S.spLighthouseBase(),
+    distiller: S.spDistiller(),
+    grill: S.spGrill(),
+    wheatPatch: S.spWheatPatch(),
+    herbGarden: S.spHerbGarden(),
+    oven: S.spOven(),
+    saltPan: S.spSaltPan(),
     board: S.spBoard(),
     // 其他岛上装饰用的树（和主岛能采的树同一种画法）
     tree_d: S.spTree(5, true),

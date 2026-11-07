@@ -181,13 +181,76 @@ describe('2D rules', () => {
     must(s, { t: 'drinkSea' });
   });
 
+  it('storage: catches go to the pack, the hold is worked from the raft, stored water can be drunk at the chest', async () => {
+    const { runUntil } = await import('../src/sim/bot');
+    const { island } = await import('../src/sim/util');
+    const { objectsOn } = await import('../src/sim/interact');
+    const s = runUntil(41, 'engineer');
+    // 在石头岛：救出工程师后有设施（蒸馏）、工作台、储物箱，木筏停在码头边
+    expect(s.player.at).toBe('stoneIsle');
+    const kinds = objectsOn(s, 'stoneIsle').map((o) => o.kind);
+    for (const k of ['facility', 'workbench', 'chest', 'raft', 'npc', 'lighthouse']) expect(kinds, k).toContain(k);
+    // 货舱 ⇄ 背包：要在木筏旁边
+    s.player.pack = { wood: 4 };
+    s.player.hold = {};
+    expect(dispatch(s, { t: 'transfer', item: 'wood', from: 'pack', to: 'hold', n: 4 }).msg?.k).toBe('err.notNear');
+    must(s, { t: 'transfer', item: 'wood', from: 'pack', to: 'hold', n: 4 });
+    expect(s.player.hold.wood).toBe(4);
+    // 储物箱里的淡水可以直接喝
+    const st = island(s, 'stoneIsle');
+    st.stock.water = 5;
+    s.player.water = 20;
+    must(s, { t: 'consume', from: 'stock', item: 'water' });
+    expect(s.player.water).toBeGreaterThan(20);
+    expect(st.stock.water).toBe(4);
+    // 海上捕到的鱼进背包
+    must(s, { t: 'leave' });
+    s.player.pack = {};
+    for (let i = 0; i < 30 && !(s.player.pack.fish ?? 0); i++) {
+      s.player.hp = 100;
+      must(s, { t: 'fishSea' });
+    }
+    expect(s.player.pack.fish).toBeGreaterThan(0);
+    expect(s.player.hold.fish ?? 0).toBe(0);
+  });
+
+  it('islands upgrade by hand at the facility once fed: meal streak is the condition, materials the cost', async () => {
+    const { runUntil } = await import('../src/sim/bot');
+    const { island } = await import('../src/sim/util');
+    const { BALANCE } = await import('../src/config/balance');
+    const s = runUntil(43, 'engineer');
+    const st = island(s, 'stoneIsle');
+    expect(st.level).toBe(1);
+    expect(dispatch(s, { t: 'upgradeIsland' }).msg?.k).toBe('err.notNear');
+    st.mealStreak = BALANCE.economy.mealsToUpgrade - 1;
+    expect(dispatch(s, { t: 'upgradeIsland' }).ok).toBe(false);
+    // 吃饱够了也不会自动升级
+    st.mealStreak = BALANCE.economy.mealsToUpgrade + 2;
+    advance(s, 60);
+    expect(st.level).toBe(1);
+    s.player.pack = { ...BALANCE.economy.upgradeCost[0] };
+    must(s, { t: 'upgradeIsland' });
+    expect(st.level).toBe(2);
+    expect(st.mealStreak).toBe(0);
+  });
+
+  it('every island has some basics by type: trees on Forest Isle, herbs on Herb Isle, a fishing spot on fishing islands', async () => {
+    const { nodesOn } = await import('../src/sim/forage');
+    const { objectsOn } = await import('../src/sim/interact');
+    const s = createGame(17);
+    expect(nodesOn(s, 'forestIsle').filter((n) => n.kind === 'tree').length).toBeGreaterThanOrEqual(6);
+    expect(nodesOn(s, 'herbIsle').filter((n) => n.kind === 'herb').length).toBeGreaterThanOrEqual(4);
+    expect(objectsOn(s, 'fisherIsle').some((o) => o.kind === 'shoal')).toBe(true);
+    expect(objectsOn(s, 'stoneIsle').some((o) => o.kind === 'shoal')).toBe(false);
+  });
+
   it('saves with the 2D format and refuses other versions', () => {
     const s = createGame(11);
     s.walk.x = 123;
     const back = deserialize(serialize(s))!;
     expect(back.version).toBe(SAVE_VERSION);
     expect(back.walk.x).toBe(123);
-    expect(deserialize(JSON.stringify({ ...s, version: 4 }))).toBeNull();
+    expect(deserialize(JSON.stringify({ ...s, version: 99 }))).toBeNull();
   });
 
   it('crafting at sea is refused even with materials', async () => {

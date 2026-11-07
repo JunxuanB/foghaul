@@ -136,6 +136,8 @@ export function forageSpots(id: string, seed: number, kind: 'tree' | 'herb'): [n
       if (Math.hypot(jx - L.spawn[0], jy - L.spawn[1]) < B.keepClear.spawn) continue;
       if (L.dock && rectDist(jx, jy, L.dock) < B.keepClear.spawn) continue;
       if (L.objects.some((o) => (o.foot ? rectDist(jx, jy, o.foot) : Math.hypot(o.x - jx, o.y - jy)) < sp)) continue;
+      // 也避开跟着存档出现的东西的位置（人、灯塔、设施、工作台、储物箱、请求板）
+      if (slotPoints(t).some(([x, y]) => Math.hypot(x - jx, y - jy) < sp + 10)) continue;
       out.push([jx, jy]);
     }
   spotCache.set(key, out);
@@ -143,6 +145,13 @@ export function forageSpots(id: string, seed: number, kind: 'tree' | 'herb'): [n
 }
 
 const hashXY = (x: number, y: number, s: number) => hash(x, y, 300 + s);
+
+/** 模板里所有槽位的位置 */
+export function slotPoints(t: MapTemplate): [number, number][] {
+  const S = t.slots;
+  if (!S) return [];
+  return [...(S.npc ?? []), ...[S.lighthouse, S.workbench, S.chest, S.board, S.facility].filter((x): x is [number, number] => !!x)];
+}
 
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax;

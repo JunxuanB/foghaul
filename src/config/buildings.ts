@@ -14,6 +14,8 @@ export type ObjKind =
   | 'farm'
   | 'npc'
   | 'board'
+  | 'raft'
+  | 'facility'
   | 'decor';
 
 /** 相对底边中点的矩形：x、y 是左上角偏移 */
@@ -60,9 +62,32 @@ export const OBJ_DEFS: Record<string, ObjDef> = {
   lhBase: { kind: 'lighthouse', foot: { x: -12, y: -7, w: 24, h: 7 }, hit: { x: -14, y: -10, w: 28, h: 10 } },
   npc: { kind: 'npc', foot: { x: -4, y: -4, w: 8, h: 4 }, hit: { x: -8, y: -12, w: 16, h: 12 } },
   board: { kind: 'board', foot: { x: -6, y: -4, w: 12, h: 4 }, hit: { x: -9, y: -8, w: 18, h: 8 } },
+  // 设施建筑（所有设施共用一套范围，精灵按产物换，见 FACILITY_SPRITE）
+  facility: { kind: 'facility', foot: { x: -14, y: -6, w: 28, h: 6 }, hit: { x: -17, y: -12, w: 34, h: 12 } },
+  // 停在码头边的木筏：货舱装卸、改造（在水里，不挡路）
+  raft: { kind: 'raft', hit: { x: -21, y: -22, w: 42, h: 22 } },
   tree_d: { kind: 'decor', foot: { x: -5, y: -6, w: 10, h: 6 } },
   stree_d: { kind: 'decor', foot: { x: -4, y: -5, w: 8, h: 5 } },
 };
 
 /** 每种互动对象的“初见介绍”和按键提示文字键：intro.<kind>、act.<kind> */
-export const INTERACTIVE: ObjKind[] = ['tree', 'shoal', 'herb', 'workbench', 'chest', 'bed', 'lighthouse', 'wreck', 'dock', 'farm', 'npc', 'board'];
+export const INTERACTIVE: ObjKind[] = ['tree', 'shoal', 'herb', 'workbench', 'chest', 'bed', 'lighthouse', 'wreck', 'dock', 'farm', 'npc', 'board', 'raft', 'facility'];
+
+/** 设施建筑的样子：产物或配方 id → 精灵名（docs/2d-design.md 第 6 节“设施建筑的样子”） */
+export const FACILITY_SPRITE: Record<string, string> = {
+  water: 'distiller',
+  bottledWater: 'distiller',
+  distill: 'distiller',
+  wood: 'woodpile',
+  cup: 'workbench',
+  fish: 'net',
+  grilledFish: 'grill',
+  wheat: 'wheatPatch',
+  bread: 'oven',
+  sandwich: 'oven',
+  feast: 'oven',
+  herb: 'herbGarden',
+  medkit: 'herbGarden',
+  salt: 'saltPan',
+  default: 'woodpile',
+};

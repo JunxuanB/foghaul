@@ -27,14 +27,52 @@ export interface MapTemplate {
    * 数量、每天长几棵、每棵能采几次在 BALANCE.forage。
    */
   forage: Record<'tree' | 'herb', { cx: number; cy: number; r: number }[]>;
+  /** 采集点数量（开局几个、每天新长几个、最多几个）；不写就用 BALANCE.forage 的（主岛的数量） */
+  forageCounts?: Partial<Record<'tree' | 'herb', { start: number; perDay: number; max: number }>>;
   /** 外圈的雾：离中心的椭圆距离从 a 到 b 渐浓 */
   fog: [number, number];
   /**
    * 跟着存档变的物体放在哪（底边中点）：岛上的人、灯塔（没修时是地基）、
    * 加入网络后出现的工作台和储物箱、村落的请求板。主岛这些是固定物体，不用槽位。
    */
-  slots?: { npc?: [number, number][]; lighthouse?: [number, number]; workbench?: [number, number]; chest?: [number, number]; board?: [number, number] };
+  slots?: {
+    npc?: [number, number][];
+    lighthouse?: [number, number];
+    workbench?: [number, number];
+    chest?: [number, number];
+    board?: [number, number];
+    /** 这座岛的设施建筑（加入网络、有了工作以后出现） */
+    facility?: [number, number];
+  };
 }
+
+/** 通用模板的岛上长多少树和草药（按群系，最多几个）；开局长满，每天补一半 */
+export const BIOME_FORAGE: Record<string, { tree: number; herb: number }> = {
+  forest: { tree: 9, herb: 1 },
+  herb: { tree: 2, herb: 6 },
+  stone: { tree: 1, herb: 1 },
+  fishing: { tree: 2, herb: 1 },
+  field: { tree: 2, herb: 2 },
+  none: { tree: 2, herb: 1 },
+};
+
+/** 通用模板里树和草药能长的区域 */
+export const GENERIC_FORAGE_ZONES: Record<'small' | 'village' | 'islet', { cx: number; cy: number; r: number }[]> = {
+  small: [
+    { cx: 200, cy: 130, r: 80 },
+    { cx: 360, cy: 112, r: 60 },
+    { cx: 420, cy: 220, r: 50 },
+  ],
+  village: [],
+  islet: [],
+};
+
+/** 渔场群系的岛有浅滩钓点 */
+export const GENERIC_SHOAL: Record<'small' | 'village' | 'islet', MapTemplate['shoal'] | undefined> = {
+  small: { x: 120, y: 300, out: 15 },
+  village: undefined,
+  islet: undefined,
+};
 
 /** 没有专门模板的岛按种类用这些通用模板（M3 起再给每座岛做专门的模板）。装饰按群系在 world/templates.ts 里补 */
 export const GENERIC_MAPS: Record<'small' | 'village' | 'islet', Omit<MapTemplate, 'id'>> = {
@@ -54,7 +92,7 @@ export const GENERIC_MAPS: Record<'small' | 'village' | 'islet', Omit<MapTemplat
     objects: [],
     forage: { tree: [], herb: [] },
     fog: [1.1, 1.38],
-    slots: { npc: [[344, 214], [372, 222], [320, 236]], lighthouse: [430, 140], workbench: [222, 190], chest: [172, 202] },
+    slots: { npc: [[344, 214], [372, 222], [320, 236]], lighthouse: [430, 140], workbench: [222, 190], chest: [172, 202], facility: [246, 252] },
   },
   // 配方村、人力村、进出口局
   village: {

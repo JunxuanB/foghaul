@@ -158,8 +158,12 @@ export const BALANCE = {
     ],
     /** 吃饭时刻（游戏分钟，一天内） */
     mealTimes: [6 * 60, 14 * 60, 22 * 60],
-    /** 连续满足多少顿后升级 */
+    /** 连续吃饱多少顿后可以升级（2D：在设施旁手动升级，见 upgradeCost） */
     mealsToUpgrade: 6,
+    /** 岛升级的材料：第 i 项是从 i+1 级升到 i+2 级 */
+    upgradeCost: [{ wood: 15, fish: 6 }, { wood: 30, bottledWater: 8 }] as Record<string, number>[],
+    /** 升级花的时间（游戏分钟） */
+    upgradeMinutes: 60,
     /** 三级岛每天早上生小孩的概率 */
     birthChance: 0.15,
     /** 出口前给居民留多少小时的口粮 */

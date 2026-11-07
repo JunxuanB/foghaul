@@ -3,44 +3,19 @@ import { BALANCE } from '../../config/balance';
 import { ITEMS, ITEM_ORDER, PART_IDS, type ItemId } from '../../config/items';
 import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
 import { LANGS, t, tm } from '../../i18n';
-import { buildCost, canUseStock, craftBlock, here } from '../../sim/actions';
-import { canPay, costAvailable, slotsUsed, slotView, stockCap } from '../../sim/inventory';
-import type { Stock } from '../../sim/types';
+import { canUseStock, craftBlock, here } from '../../sim/actions';
+import { costAvailable, slotsUsed, stockCap } from '../../sim/inventory';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
-import { ItemIcon, ItemName, Slot } from '../components/Item';
+import { ItemIcon, ItemName } from '../components/Item';
 import { Rich } from '../components/Text';
 import { useUi } from '../ui';
 import { Panel } from './Panel';
 import { LighthousePanel, MapPanel, TalkPanel } from './SeaPanels';
+import { FacilityPanel, PackHold, RaftPanel, SlotGrid } from './IslandPanels';
 
 const list = (s: Partial<Record<ItemId, number>>) => ITEM_ORDER.filter((id) => (s[id] ?? 0) > 0);
 
-/** 按格子画一个背包 / 货舱：每格一种东西，超过堆叠上限的拆成几格；零件另列一行 */
-function SlotGrid({ stock, slots, onPick, title }: { stock: Stock; slots: number; onPick?: (id: ItemId) => void; title?: (id: ItemId) => string }) {
-  const v = slotView(stock);
-  return (
-    <>
-      <div className="grid-slots">
-        {Array.from({ length: Math.max(slots, v.slots.length) }, (_, i) => {
-          const c = v.slots[i];
-          return <Slot key={i} id={c?.id} n={c?.n} onClick={c && onPick ? () => onPick(c.id) : undefined} title={c && title ? title(c.id) : undefined} />;
-        })}
-      </div>
-      {v.keys.length > 0 && (
-        <div className="rows">
-          <span className="u-label">{t('ui.keyItems')}</span>
-          <div className="seg">
-            {v.keys.map((k) => (
-              <ItemName key={k.id} id={k.id} n={k.n} />
-            ))}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-/** 背包（Tab）：点可以吃喝的东西直接用 */
+/** 背包（Tab）：点可以吃喝的东西直接用。海上多一栏货舱，可以在两边之间搬；岛上看得到货舱，要到码头边的木筏旁才能搬 */
 export function InventoryPanel() {
   const g = useGame();
   const store = useStore();
@@ -49,6 +24,15 @@ export function InventoryPanel() {
   const use = (id: ItemId) => {
     if (ITEMS[id].eat) store.dispatch({ t: 'consume', from: 'pack', item: id });
   };
+  if (p.hasRaft) {
+    const atSea = !p.at;
+    return (
+      <Panel title={t('ui.pack')} sub={atSea ? t('ui.packHoldSea') : t('ui.packHoldIsland')} wide>
+        <PackHold canMove={atSea} />
+        <p className="u-dim">{t('ui.stackRule', { a: BALANCE.inventory.stack.material, b: BALANCE.inventory.stack.consumable })}</p>
+      </Panel>
+    );
+  }
   return (
     <Panel title={t('ui.pack')} sub={t('ui.slotsUsed', { n: slotsUsed(p.pack), cap })}>
       <SlotGrid stock={p.pack} slots={cap} onPick={use} title={(id) => t('item.' + id) + (ITEMS[id].eat ? ' · ' + t('ui.clickToUse') : '')} />
@@ -110,39 +94,7 @@ export function CraftPanel() {
           );
         })}
       </div>
-      {g.player.hasRaft && <HoldUpgrade />}
     </Panel>
-  );
-}
-
-/** 工作台上加固货舱：木头够了就能做，每次多几格 */
-function HoldUpgrade() {
-  const g = useGame();
-  const store = useStore();
-  const cost = buildCost(g, 'holdUpgrade');
-  if (!cost) return null;
-  const isl = here(g);
-  const src = canUseStock(isl) ? isl : undefined;
-  const ok = canPay(g, src, cost);
-  return (
-    <div className="recipe">
-      <span className="big">
-        <ItemIcon id="wood" />
-      </span>
-      <div>
-        <div>{t('ui.holdUpgrade', { from: g.player.holdCap, to: g.player.holdCap + BALANCE.home.holdUpgrade.step })}</div>
-        <div className="ins">
-          {Object.entries(cost).map(([id, n]) => (
-            <span key={id} className={costAvailable(g, src, id as ItemId) >= (n ?? 0) ? '' : 'lack'}>
-              <ItemName id={id as ItemId} /> {Math.min(costAvailable(g, src, id as ItemId), 99)}/{n}
-            </span>
-          ))}
-        </div>
-      </div>
-      <button className="u-btn" disabled={!ok} onClick={() => store.dispatch({ t: 'build', what: 'holdUpgrade' })}>
-        {t('ui.make')}
-      </button>
-    </div>
   );
 }
 
@@ -175,20 +127,26 @@ export function ChestPanel() {
               const cap = stockCap(g, isl, id);
               const portable = ITEMS[id].portable;
               return (
-                <button
-                  key={id}
-                  type="button"
-                  className="stock-row"
-                  disabled={!portable}
-                  onClick={() => move(id, 'stock')}
-                  title={portable ? t('ui.takeOut', { item: { k: 'item.' + id } }) : t('ui.notPortable')}
-                >
-                  <ItemName id={id} />
-                  <i style={{ ['--v' as string]: Math.min(1, n / Math.max(1, cap)) }} />
-                  <span className={n >= cap ? 'full' : ''}>
-                    {n}/{cap}
-                  </span>
-                </button>
+                <div key={id} className="stock-line">
+                  <button
+                    type="button"
+                    className="stock-row"
+                    disabled={!portable}
+                    onClick={() => move(id, 'stock')}
+                    title={portable ? t('ui.takeOut', { item: { k: 'item.' + id } }) : t('ui.notPortable')}
+                  >
+                    <ItemName id={id} />
+                    <i style={{ ['--v' as string]: Math.min(1, n / Math.max(1, cap)) }} />
+                    <span className={n >= cap ? 'full' : ''}>
+                      {n}/{cap}
+                    </span>
+                  </button>
+                  {ITEMS[id].eat && (
+                    <button type="button" className="u-btn sec eat" onClick={() => store.dispatch({ t: 'consume', from: 'stock', item: id })}>
+                      {t(ITEMS[id].verb === 'drink' ? 'ui.drinkIt' : ITEMS[id].verb === 'use' ? 'ui.useIt' : 'ui.eatIt')}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -316,6 +274,10 @@ export function PanelHost() {
       return <JournalPanel />;
     case 'talk':
       return <TalkPanel />;
+    case 'raft':
+      return <RaftPanel />;
+    case 'facility':
+      return <FacilityPanel />;
     case 'map':
       return <MapPanel />;
     case 'help':

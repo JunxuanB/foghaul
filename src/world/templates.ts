@@ -1,6 +1,6 @@
 // 每座岛用哪张地图模板：有专门模板（config/maps.ts 的 MAPS）就用它，否则按岛的种类用通用模板，
 // 再按群系补上装饰（石头岛多石头、森林岛多树……）。纯函数，按岛 id 缓存。
-import { GENERIC_MAPS, MAPS, type MapTemplate } from '../config/maps';
+import { BIOME_FORAGE, GENERIC_FORAGE_ZONES, GENERIC_MAPS, GENERIC_SHOAL, MAPS, type MapTemplate } from '../config/maps';
 import { ISLANDS } from '../config/world';
 import { hash } from '../art/noise';
 
@@ -28,7 +28,8 @@ export function templateFor(islandId: string): MapTemplate | null {
   if (!t) {
     const def = ISLANDS.find((x) => x.id === islandId);
     if (def) {
-      const g = def.kind === 'islet' ? GENERIC_MAPS.islet : def.kind === 'recipeVillage' || def.kind === 'laborVillage' || def.kind === 'bureau' ? GENERIC_MAPS.village : GENERIC_MAPS.small;
+      const kind = def.kind === 'islet' ? 'islet' : def.kind === 'recipeVillage' || def.kind === 'laborVillage' || def.kind === 'bureau' ? 'village' : 'small';
+      const g = GENERIC_MAPS[kind];
       const I = g.island;
       const seed = [...islandId].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) & 0xffff;
       const pool = DECOR[def.biome ?? 'none'] ?? DECOR.none;
@@ -40,7 +41,19 @@ export function templateFor(islandId: string): MapTemplate | null {
         const pick = pool.find(([, w]) => (r -= w) < 0)?.[0] ?? pool[0][0];
         objects.push([pick, Math.round(I.cx + fx * I.rx), Math.round(I.cy + fy * I.ry)]);
       });
-      t = { ...g, id: islandId, island: { ...I, seed: I.seed + (seed % 97) }, objects };
+      // 岛按种类有一些基础物资：树和草药（数量看群系）、渔场的浅滩钓点
+      const zones = GENERIC_FORAGE_ZONES[kind];
+      const counts = BIOME_FORAGE[def.biome ?? 'none'] ?? BIOME_FORAGE.none;
+      const per = (max: number) => ({ start: max, perDay: Math.ceil(max / 2), max });
+      t = {
+        ...g,
+        id: islandId,
+        island: { ...I, seed: I.seed + (seed % 97) },
+        objects,
+        forage: { tree: zones.length ? zones : [], herb: zones.length ? zones : [] },
+        forageCounts: { tree: per(zones.length ? counts.tree : 0), herb: per(zones.length ? counts.herb : 0) },
+        shoal: def.biome === 'fishing' ? GENERIC_SHOAL[kind] : g.shoal,
+      };
     }
   }
   cache.set(islandId, t);
