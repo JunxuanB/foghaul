@@ -37,12 +37,12 @@ describe('2D rules', () => {
     must(s, { t: 'craft', recipe: 'raft' });
     expect(currentGuide(s)?.id).toBe('vitals');
     must(s, { t: 'ackGuide', id: 'vitals' });
-    expect(s.guide.step).toBe(GUIDE.length);
+    expect(currentGuide(s)?.id).toBe('setSail');
     // 晚上插一条“回小屋睡觉”
     advance(s, 18 * 60 - (s.time % 1440) + 5);
     expect(currentGuide(s)?.id).toBe('night');
     must(s, { t: 'sleep' });
-    expect(currentGuide(s)).toBeNull();
+    expect(currentGuide(s)?.id).toBe('setSail');
   });
 
   it('every interactive object has a name, an intro and a prompt', () => {
@@ -120,6 +120,65 @@ describe('2D rules', () => {
     expect(back.version).toBe(SAVE_VERSION);
     expect(back.forage.home.length).toBeGreaterThan(0);
     expect('herbsLeft' in back.flags).toBe(false);
+  });
+
+  it('M2: sail freely to Stone Isle, land, rescue the engineer and build the lighthouse', async () => {
+    const { BALANCE } = await import('../src/config/balance');
+    const { island } = await import('../src/sim/util');
+    const { canEnter } = await import('../src/sim/map');
+    const s = createGame(31);
+    s.player.pack = { wood: 8, fish: 6 };
+    s.walk.moved = 60;
+    must(s, { t: 'craft', recipe: 'raft' });
+    must(s, { t: 'ackGuide', id: 'vitals' });
+    expect(currentGuide(s)?.id).toBe('setSail');
+    // 码头离工作台远：出海要站在码头上（这里直接离岛）
+    must(s, { t: 'leave' });
+    expect(s.player.at).toBeNull();
+    // 出海后木筏在主岛南边的水里，所在格子照亮了
+    const T = BALANCE.sail.tile;
+    expect(canEnter(s, Math.floor(s.raft.x / T), Math.floor(s.raft.y / T))).toBe(true);
+    expect(currentGuide(s)?.id).toBe('toStone');
+    const stone = island(s, 'stoneIsle');
+    // 按像素航行：每次 16 像素，朝石头岛走（先横后竖，绕开雾的格子由 canEnter 保证这条路是亮的）
+    let guard = 0;
+    while (Math.max(Math.abs(stone.x - s.player.x), Math.abs(stone.y - s.player.y)) > 2 && guard++ < 400) {
+      const tx = stone.x * T + T / 2;
+      const ty = stone.y * T + T / 2;
+      const dx = Math.sign(tx - s.raft.x);
+      const dy = Math.sign(ty - s.raft.y);
+      const step = BALANCE.sail.stepPixels;
+      const nx = s.raft.x + (Math.abs(tx - s.raft.x) > 8 ? dx * step : 0);
+      const ny = s.raft.y + (Math.abs(tx - s.raft.x) > 8 ? 0 : dy * step);
+      s.player.hp = 100;
+      if (!dispatch(s, { t: 'sail', x: nx, y: ny }).ok) {
+        // 这一格进不去：换个方向
+        must(s, { t: 'sail', x: s.raft.x, y: s.raft.y + (dy || 1) * step });
+      }
+      if (s.player.at) break;
+    }
+    expect(stone.discovered).toBe(true);
+    expect(currentGuide(s)?.id).toBe('dockStone');
+    // 瞬移太远的一步会被拒绝
+    expect(dispatch(s, { t: 'sail', x: s.raft.x + T * 5, y: s.raft.y }).ok).toBe(false);
+    must(s, { t: 'dock', island: 'stoneIsle' });
+    expect(s.player.at).toBe('stoneIsle');
+    expect(s.walk.island).toBe('stoneIsle');
+    expect(currentGuide(s)?.id).toBe('engineer');
+    // 在码头上交不了：要走到工程师身边
+    expect(dispatch(s, { t: 'deliver' }).msg?.k).toBe('err.notNear');
+    must(s, { t: 'deliver' });
+    expect(s.people.find((p) => p.role === 'engineer')?.active).toBe(true);
+    expect(currentGuide(s)?.id).toBe('stoneLighthouse');
+    s.player.pack.wood = 30;
+    expect(island(s, 'forestIsle').revealed).toBe(false);
+    must(s, { t: 'build', what: 'lighthouse' });
+    expect(stone.buildings.lighthouse).toBe(true);
+    expect(island(s, 'forestIsle').revealed).toBe(true);
+    expect(currentGuide(s)).toBeNull();
+    // 岛上站在水边才能喝海水，不能跳海捕鱼
+    expect(dispatch(s, { t: 'fishSea' }).msg?.k).toBe('err.atSeaOnly');
+    must(s, { t: 'drinkSea' });
   });
 
   it('saves with the 2D format and refuses other versions', () => {

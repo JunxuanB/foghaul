@@ -122,6 +122,8 @@ export function createGame(seed: number = newSeed()): GameState {
     forage: {},
     forageSeq: 1,
     mods: modIds(),
+    raft: { x: 0, y: 0 },
+    lastFight: null,
     villages,
     flags: {
       farm: new Array(BALANCE.home.farm.plots).fill(null),
@@ -154,6 +156,8 @@ export function createGame(seed: number = newSeed()): GameState {
   const L = layout('home', seed);
   state.walk.x = L.spawn[0];
   state.walk.y = L.spawn[1];
+  const T = BALANCE.sail.tile;
+  state.raft = { x: home.x * T + T / 2, y: home.y * T + T / 2 };
   initForage(state);
   lightFrom(state, home);
   look(state);

@@ -62,6 +62,27 @@ export const LIGHTS = {
 /** 雾：飘动速度（像素/秒）与阈值。飘得慢、两层同向（layer2 为第二层的相对速度），走动时不晕 */
 export const FOG = { driftX: 2, driftY: 0.6, layer2: 0.6, gain: 1.35, noise: 0.85, bias: -0.18, on: 0.22, onBayer: 0.5, dense: 0.3, denseBayer: 0.3 };
 
+/** 海上：岛在海图比例下的大小（像素）和浅水宽度；雾从浓到能进的过渡宽度（格） */
+export const SEA_ART = {
+  island: {
+    home: { rx: 44, ry: 30 },
+    bureau: { rx: 30, ry: 22 },
+    recipeVillage: { rx: 26, ry: 18 },
+    laborVillage: { rx: 26, ry: 18 },
+    passenger: { rx: 22, ry: 15 },
+    native: { rx: 20, ry: 14 },
+    islet: { rx: 12, ry: 8 },
+  } as Record<string, { rx: number; ry: number }>,
+  /** 高度系数：越大海岸越陡、浅水越窄 */
+  k: 26,
+  noise: 7,
+  /** 雾的过渡要多久（秒）：修好灯塔时雾当场退开 */
+  fogRecede: 1.6,
+  /** 木筏尾迹点数和消失时间（秒） */
+  wakePoints: 16,
+  wakeSeconds: 1.2,
+};
+
 /** 动画节奏 */
 export const ANIM = {
   /** 行走动画：每走多少像素换一帧（60 像素/秒时约 7.5 帧/秒） */

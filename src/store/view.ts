@@ -4,7 +4,7 @@ import type { ObjKind } from '../config/buildings';
 import type { ItemId } from '../config/items';
 import type { Msg } from '../sim/msg';
 
-export type PanelId = 'inventory' | 'craft' | 'chest' | 'lighthouse' | 'wreck' | 'journal' | 'help' | 'menu';
+export type PanelId = 'inventory' | 'craft' | 'chest' | 'lighthouse' | 'wreck' | 'journal' | 'help' | 'menu' | 'map' | 'talk';
 
 /** 打开时暂停时间的面板（菜单、帮助） */
 export const PAUSING_PANELS: PanelId[] = ['menu', 'help'];
@@ -28,6 +28,8 @@ export interface Pop {
 
 export interface ViewState {
   panel: PanelId | null;
+  /** 对话面板：在和谁说话（人的 id；村民为 null） */
+  talkTo: string | null;
   /** 面前选中的物体 */
   focus: { id: string; kind: ObjKind } | null;
   prompts: Prompt[];
@@ -47,7 +49,11 @@ export interface ViewState {
     edge: { x: number; y: number; angle: number; dist: number } | null;
     /** 引导高亮的界面元素 */
     uiTarget: string | null;
+    /** 海上的岛名（屏幕位置，游戏像素） */
+    labels: Record<string, { x: number; y: number }>;
   };
+  /** 海上显示名字的岛（已发现的） */
+  labels: { id: string; dim: boolean }[];
   /** 画面放大倍数 */
   k: number;
   /** 调试：手动指定的时刻（分钟） */
@@ -59,13 +65,15 @@ type Listener = () => void;
 export class ViewStore {
   s: ViewState = {
     panel: null,
+    talkTo: null,
     focus: null,
     prompts: [],
     intro: null,
     action: null,
     hotbar: 0,
     pops: [],
-    anchors: { player: { x: 0, y: 0 }, promptBelow: false, intro: null, edge: null, uiTarget: null },
+    anchors: { player: { x: 0, y: 0 }, promptBelow: false, intro: null, edge: null, uiTarget: null, labels: {} },
+    labels: [],
     k: 2,
     debugMinute: null,
   };

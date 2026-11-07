@@ -58,6 +58,25 @@ try {
   await page.getByRole('button', { name: '制作' }).first().click();
   await page.keyboard.press('Escape');
   if (!(await st()).player.hasRaft) throw new Error('没有造出木筏');
+  // M2：走到码头按 E 出海，按键划一段
+  await page.evaluate(() => {
+    const s = window.foghaul.state;
+    s.tips.push('sea');
+    const d = window.foghaulGame.scene.getScene('island').L.dock;
+    Object.assign(s.walk, { x: d.x + d.w / 2, y: d.y + 20, facing: 'down' });
+  });
+  await page.waitForTimeout(400);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !!window.foghaulGame?.scene.isActive('sea'), null, { timeout: 15000 });
+  const r0 = (await st()).raft;
+  await page.keyboard.down('KeyD');
+  await page.waitForTimeout(1200);
+  await page.keyboard.up('KeyD');
+  await page.waitForTimeout(1200);
+  const s3 = await st();
+  if (s3.player.at !== null) throw new Error('没有出海');
+  if (!(s3.stats.moves > 0) || Math.abs(s3.raft.x - r0.x) < 4) throw new Error('木筏没有划动：' + JSON.stringify([r0, s3.raft, s3.stats.moves]));
+  await page.screenshot({ path: `${OUT}/sea.png` });
   for (const [m, n] of [[12 * 60, 'day'], [19 * 60 + 40, 'dusk'], [23 * 60, 'night']]) {
     await page.evaluate((m) => window.foghaulView.set({ debugMinute: m }), m);
     await page.waitForTimeout(300);

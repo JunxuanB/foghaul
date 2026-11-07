@@ -10,6 +10,7 @@ import { dayOf, minuteOfDay } from '../../sim/clock';
 import { currentGuide } from '../../sim/guide';
 import { objectives } from '../../sim/objectives';
 import { activeTip, has } from '../../sim/tutorial';
+import { towardsMsg } from '../../sim/hints';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
 import { Rich } from '../components/Text';
 import { ItemName, Slot } from '../components/Item';
@@ -50,7 +51,7 @@ function Status() {
   return (
     <div className="hud-tl">
       <div className={'hud-place' + fc}>
-        {t('island.' + (p.at ?? 'home'))}
+        {p.at ? t('island.' + p.at) : t('ui.atSea')}
         {showClock && <small>{t('ui.clock', { day: dayOf(g.time), hh: pad(Math.floor(min / 60)), mm: pad(Math.floor(min % 60)) })}</small>}
       </div>
       {showVitals && (
@@ -94,6 +95,68 @@ function Goal() {
           <Rich s={detail} />
         </p>
       </div>
+      <Towards />
+    </div>
+  );
+}
+
+/** 海上：目标卡下面一行方向提示（“→ 石头岛 东南 10 格”） */
+function Towards() {
+  const g = useGame();
+  if (g.player.at) return null;
+  const step = currentGuide(g);
+  const id = (step?.target.kind === 'island' ? step.target.id : step?.at) ?? g.player.target;
+  const isl = id ? g.islands.find((i) => i.id === id && i.revealed) : undefined;
+  if (!isl) return null;
+  return (
+    <div className="towards">
+      <Rich s={tm(towardsMsg(g, isl.id))} />
+    </div>
+  );
+}
+
+/** 海上战斗：一张小卡片，显示双方武力和结果，几秒后收起 */
+function FightCard() {
+  const g = useGame();
+  const f = g.lastFight;
+  const [shown, setShown] = useState<number | null>(null);
+  useEffect(() => {
+    if (!f) return;
+    setShown(f.at);
+    const id = setTimeout(() => setShown(null), BALANCE.ui.fightCardMs);
+    return () => clearTimeout(id);
+  }, [f?.at]);
+  if (!f || shown !== f.at) return null;
+  return (
+    <div className="u-panel fight">
+      <b>{t('foe.' + f.foe)}</b>
+      <div className="vs">
+        <span>{t('ui.yourForce', { n: f.mine })}</span>
+        <span>{t('ui.foeForce', { n: f.theirs })}</span>
+      </div>
+      <div className={'res ' + (f.win ? 'tone-g' : 'tone-b')}>{t(f.win ? 'ui.fightWon' : 'ui.fightLost')}</div>
+    </div>
+  );
+}
+
+/** 海上：右下角的图例（迷雾 / 可探索 / 已探索） */
+function SeaLegend() {
+  const g = useGame();
+  if (g.player.at) return null;
+  return (
+    <div className="u-panel legend">
+      <span>
+        <i className="sw fog" />
+        {t('ui.legendFog')}
+      </span>
+      <span>
+        <i className="sw open" />
+        {t('ui.legendOpen')}
+      </span>
+      <span>
+        <i className="sw seen" />
+        {t('ui.legendSeen')}
+      </span>
     </div>
   );
 }
@@ -164,16 +227,21 @@ function Hotbar() {
   );
 }
 
-/** 右下角：快捷栏选中的物品（名字、数量、能用时的按键）。固定在角上，快捷栏本身不会被挤动 */
+/** 右下角：海上的图例，下面是快捷栏选中的物品（名字、数量、能用时的按键）。固定在角上，快捷栏本身不会被挤动 */
 function Selected() {
   const g = useGame();
   const v = useView();
-  if (!has(g, 'hotbar')) return null;
-  const cur = slotView(g.player.pack).slots[v.hotbar];
-  if (!cur) return null;
+  const cur = has(g, 'hotbar') ? slotView(g.player.pack).slots[v.hotbar] : undefined;
+  if (!cur)
+    return (
+      <div className="hud-br">
+        <SeaLegend />
+      </div>
+    );
   const def = ITEMS[cur.id];
   return (
     <div className="hud-br">
+      <SeaLegend />
       <div className="u-panel sel-card">
         <ItemName id={cur.id} n={cur.n} />
         {def.eat && (
@@ -213,6 +281,7 @@ export function Hud() {
       </div>
       <Hotbar />
       <Selected />
+      <FightCard />
     </div>
   );
 }

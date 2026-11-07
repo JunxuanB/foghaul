@@ -29,6 +29,7 @@ export function RecipePopup() {
           </span>
         )}
         <div className="eq">
+          {ins.length === 0 && <span>{t('ui.seawater')}</span>}
           {ins.map(([id, n]) => (
             <ItemName key={id} id={id} n={n} />
           ))}

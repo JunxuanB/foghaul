@@ -22,9 +22,13 @@ i18n/     中英词典
 
 依赖方向只能往上：`ui`、`game` → `store` → `sim` → `world` → `art`、`config`。`sim` 和 `world` 能在 Vitest 里直接跑。
 
-## 2. 一帧里发生什么
+## 2. 场景和一帧里发生什么
 
-`IslandScene.update(time, delta)`：
+两个场景：`IslandScene`（岛上走路）和 `SeaScene`（海上划木筏），都继承 `game/scenes/WorldScene.ts`。共用的事情只在 `WorldScene` 里写一次：镜头（`placeCameraOn`、`snap`）、特效画布（`fxCanvas`、`fxOrigin`）、灯光遮罩（`paintLights`）、换色着色器、点阵过渡（`fadeThrough`，进场景时自动从黑亮起）、昼夜（`this.phase`）、全局按键（`panelAction`：Tab / J / H / M / Esc / 1–5）、引导的边缘箭头（`pointAt`）、**切换场景**。
+
+切换场景的规则只有一条：`state.player.at` 和场景对不上就换（`at` 为 null 是海上，否则是那座岛）。所以靠岸、出海、死后在床边醒来都不需要专门写切换：先 `fadeThrough(() => dispatch(...))`，下一帧 `tickWorld` 发现对不上就 `scene.start`。新场景开始时清掉上一个场景的临时界面（介绍卡、按键提示、岛名）。
+
+`IslandScene.update(time, delta)`（`SeaScene` 一样，先调 `tickWorld`）：
 
 1. `store.hold('panel', …)`：菜单、帮助打开时暂停时间。
 2. `store.frame(delta)`：把现实时间换成游戏分钟，满 1 分钟才调 `advance()`，再 `updateUnlocks()`（HUD 元素逐步出现、引导推进）。
@@ -48,21 +52,26 @@ i18n/     中英词典
 | `intros` | 出现过初见介绍的物体种类 |
 | `forage` / `forageSeq` | 每座岛今天的树和草药丛（位置、精灵、还能采几次） |
 | `mods` | 开局时加载的 MOD |
+| `raft` | 木筏在海面上的像素位置（`player.x / y` 仍是它所在的格子） |
+| `lastFight` | 最近一次海上战斗（界面显示一张小卡片） |
+| `pendingCrate.x / y` | 漂流物在海面上的位置 |
 
-存档：`sim/save.ts`，`SAVE_VERSION = 2`，键 `foghaul2d.save.v1`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
+存档：`sim/save.ts`，`SAVE_VERSION = 3`，键 `foghaul2d.save.v1`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
 
 界面临时状态（不存档）在 `store/view.ts` 的 `ViewState`：开着的面板、选中的物体、按键提示、初见介绍、正在做的动作、快捷栏选中格、“+1”、调试用的画面时刻。
 
 ## 4. 地图与物体
 
-- **模板**：`config/maps.ts`。岛的椭圆、小路、农田、码头、浅滩方向、出生点、固定物体、采集点区域、外圈雾。
+- **模板**：`config/maps.ts`。岛的椭圆、小路、农田、码头、浅滩方向、出生点、固定物体、采集点区域、外圈雾、**槽位**（`slots`：岛上的人、灯塔、加入网络后的工作台和储物箱、请求板放在哪）。
+- **哪座岛用哪个模板**：`world/templates.ts` 的 `templateFor(id)`。有专门模板（`MAPS[id]`）就用它，否则按岛的种类用 `GENERIC_MAPS` 里的通用模板（乘客岛和原住民岛 `small`、村落和进出口局 `village`、礁石 `islet`），再按群系补装饰。**每座岛都有地图**；不要再写“没有地图就沿用文字版”的分支。
 - **生成**：`world/island.ts`
   - `layout(id, seed)`：固定物体（带碰撞底座 `foot` 和互动范围 `hit`）、码头、木筏停靠点。便宜，规则层也用。
   - `raster(id, seed)`：每像素的地形类别、高度、离小路距离、可走遮罩、外圈雾浓度，另存一份 16 像素格的可走记录。只给画面层用（生成一次约 0.1 秒，按种子缓存）。
   - `forageSpots(id, seed, kind)`：树 / 草药可以长在哪些位置。
   - `fenceRects(t)`：农田围栏挡路的范围。
 - **物体定义**：`config/buildings.ts` 的 `OBJ_DEFS`（精灵名 → 种类、底座、互动范围）。新物体先在这里登记。
-- **一座岛上的全部物体**：`sim/interact.ts` 的 `objectsOn(state, island)` = 模板里固定的 + 今天的采集点（`nodeObject` 把采集点变成物体，采完的变成树桩 / 空草丛，只是装饰）。规则层和画面层都只用这一个函数。
+- **一座岛上的全部物体**：`sim/interact.ts` 的 `objectsOn(state, island)` = 模板里固定的 + 今天的采集点（`nodeObject`）+ 跟着存档变的（`stateObjects`：站在岛上的人 `npc@<人的 id>`、灯塔或地基、加入网络后的工作台和储物箱、请求板）。规则层和画面层都只用这一个函数。
+- 画面层里，模板固定物体的底座在 Raster 的可走遮罩里；其余物体的底座每帧作为 `blockers` 单独挡路。
 
 ## 5. 碰撞
 
@@ -81,6 +90,18 @@ i18n/     中英词典
 - **会动的精灵绘制位置要对齐到屏幕像素**：`snap(v, cam)` = 镜头左上角 + 整数个屏幕像素。人物停在半个屏幕像素上时像素块宽窄不齐、会糊会闪。新加会动的东西（木筏、NPC）也用它。
 - 所有纹理在场景创建后统一设成最近邻采样；换色着色器的渲染目标也是最近邻。
 - 行走帧按走过的距离换（每 `ANIM.walkStride` 像素一帧），不按时间：帧率掉了脚步也和移动对得上，不会像在跑。
+
+## 6.5 海上
+
+- **海面**：`world/sea.ts` 的 `seaRaster(islands, seed, w, h)`：只画已经出现的岛，每座岛是一块小陆地加一圈浅水（大小 `SEA_ART.island`）。岛的集合变了才重算（按岛 id 和位置做缓存键）。
+- **格子状态的画法**：同一张海面按两种调色板各画一次（正常 / `pal('day_u')` 降一档），`syncTiles` 按每格的 `seen` / `lit` 把对应的那一格拼到 `sea_terrain` 上；已探索的格子左上角一个小点。只有变了的格子才重拼。
+- **雾**：没照亮的格子浓度 1，照亮的 0，两次 3×3 模糊后双线性放大到每像素，交给 `paintFog`。照亮的格子变了（修好灯塔）就算出新的目标浓度，`SEA_ART.fogRecede` 秒内从旧的平滑变过去——“雾当场退开”。
+- **木筏**：`SeaScene.sailRaft`。加速度、最高速度（航行等级、船速升级）、阻力、反弹都在 `BALANCE.sail`。碰撞：陆地（`isLand`）、浓雾（`canEnter` 的格子）、地图外。每航行 `stepPixels` 像素发一次 `{ t: 'sail', x, y }`：规则层校验这一步合理（离上一格不超过 2 格、不在雾里），然后推进 7 分钟、标记视野、发现岛、检定海上事件（`sim/actions.ts` 的 `afterStep`，和文字版的格子移动共用）。
+- **靠岸**：画面层判断木筏离哪座岛的陆地 `dockPixels` 以内（`nearLandOf`），发 `{ t: 'dock', island }`；规则层校验离岛中心不超过 `dockTiles` 格（`dockableIsland`）。出海：`leave` 用 `world/sea.ts` 的 `launchPoint` 把木筏放在岛的南边（不行就换方向），规则层和画面层算出来一样。
+- **漂流物**：海上事件给的漂流物带位置（木筏旁边），F 捞；离开 `crateRange` 像素就漂走了。
+- **按键**：E 靠岸、F 捞、X 跳海捕鱼（一小段动作后结算）、Z 喝海水（岛上要站在水边：`nearWater`）。
+- **小号素材**：岛上的小屋、灯塔（修好才有）、树、石头按岛的种类和群系摆（`syncIslands`，岛或灯塔变了才重摆）；海上的灯塔晚上有光束。
+- **岛名**：已发现的岛在画面里显示名字（`view.labels` + `anchors.labels`）。
 
 ## 7. 渲染
 
@@ -114,7 +135,8 @@ i18n/     中英词典
 
 - **选中**：每帧在人物 16 像素内、按朝向前方最近的一个物体（`updateFocus`）。选中的东西描灯芯色轮廓。
 - **能做什么**：`sim/interact.ts` 的 `interactInfo(state, obj)` 返回按键提示文字、能不能做、做不了的原因。界面不自己判断。
-- **校验**：`dispatch` 里 `positionError()` 检查命令需要的物体在不在旁边（`objectFor()` 登记命令 → 物体种类）。测试和脚本玩家用 `approach()` 瞬移过去。
+- **校验**：`dispatch` 里 `positionError()` 检查命令需要的物体在不在旁边（`objectFor()` 登记命令 → 物体种类：采集、制作、存取、睡觉、种地、修飞机、交付 → 人、修灯塔 → 灯塔地基、加固货舱 → 工作台）。岛上根本没有这种物体时（比如还没有“建设地基”的床）不校验；制作例外，没有工作台就不能做。测试和脚本玩家用 `approach()` 瞬移过去（岛上喝海水会走到码头上）。
+- **和人说话**：E → `talk` 面板（`view.talkTo` 是人的 id），显示要的东西、进度、身上有多少，“交付”发 `deliver`。
 - **动作**：采集类先播放动画（`ANIM.actionSeconds`），时间到了才 `dispatch`；Esc 中断不结算。建筑类直接打开面板。
 - **提示的位置**：按键提示在人物头顶；选中的东西在人物上方时放到脚下。初见介绍卡在物体上方；物体比人物低时放到物体旁边。**提示和卡片不能挡住人物和它要互动的东西。**
 
@@ -151,8 +173,8 @@ i18n/     中英词典
 
 ## 14. 测试与调试
 
-- `npm test`：规则、地图可达性、采集点、引导、存档迁移、MOD 注册、i18n、自动通关。
-- `npm run test:smoke`：Playwright 打开打包后的页面玩一段并截白天 / 黄昏 / 夜晚三张图。改了画面要跑。
+- `npm test`：规则、每座岛的地图可达性、采集点、引导、自由航行到石头岛救人修灯塔、存档迁移、MOD 注册、i18n、自动通关。
+- `npm run test:smoke`：Playwright 打开打包后的页面玩一段（造木筏、出海划一段）并截白天 / 黄昏 / 夜晚 / 海上的图。改了画面要跑。
 - 截图检查要看的：人物被不被盖住、提示挡不挡东西、颜色和背景分不分得清、夜里有没有网格感。
 - 控制台：`foghaul.state`（改完 `foghaul.bump()`）、`foghaulView.set({ debugMinute })`、`foghaulGame`。
 
@@ -161,7 +183,10 @@ i18n/     中英词典
 | 想做 | 步骤 |
 | --- | --- |
 | 加一种可互动的物体 | `OBJ_DEFS` 登记种类和范围 → `sprites.ts` 画精灵、`allSprites()` 登记 → `interact.ts` 的 `interactInfo` 写按 E 做什么，需要校验位置就在 `objectFor` 登记 → 场景 `interact()` 里打开面板或开始动作 → 词典加 `thing.<种类>`、`intro2d.<种类>`、按键提示文字 → 测试 |
-| 加一座岛的地图 | `config/maps.ts` 加模板 → `tests/island2d.test.ts` 加进可达性检查 |
+| 给某座岛做专门的地图 | `config/maps.ts` 的 `MAPS` 加一个 id 和那座岛一样的模板（`templateFor` 会优先用它）→ `tests/island2d.test.ts` 会自动检查可达性 |
+| 改通用岛的布局 | `config/maps.ts` 的 `GENERIC_MAPS`；群系装饰在 `world/templates.ts` 的 `DECOR` |
+| 改木筏手感、靠岸距离 | `BALANCE.sail` |
+| 改海上岛的大小、雾退开的速度 | `config/visual.ts` 的 `SEA_ART` |
 | 改昼夜颜色 | `config/visual.ts` 的 `PHASES`；不要改着色器的做法 |
 | 加一种可采集物 | `ForageKind`、`BALANCE.forage`、模板的 `forage` 区域、`OBJ_DEFS`、`gather` 命令 |
 | 改存档结构 | 提升 `SAVE_VERSION`，`migrate()` 写迁移，加读旧档测试，更新本文第 3 节 |

@@ -3,14 +3,15 @@ import { BALANCE } from '../../config/balance';
 import { ITEMS, ITEM_ORDER, PART_IDS, type ItemId } from '../../config/items';
 import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
 import { LANGS, t, tm } from '../../i18n';
-import { canUseStock, craftBlock, here } from '../../sim/actions';
-import { costAvailable, slotsUsed, slotView, stockCap } from '../../sim/inventory';
+import { buildCost, canUseStock, craftBlock, here } from '../../sim/actions';
+import { canPay, costAvailable, slotsUsed, slotView, stockCap } from '../../sim/inventory';
 import type { Stock } from '../../sim/types';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
 import { ItemIcon, ItemName, Slot } from '../components/Item';
 import { Rich } from '../components/Text';
 import { useUi } from '../ui';
 import { Panel } from './Panel';
+import { LighthousePanel, MapPanel, TalkPanel } from './SeaPanels';
 
 const list = (s: Partial<Record<ItemId, number>>) => ITEM_ORDER.filter((id) => (s[id] ?? 0) > 0);
 
@@ -109,7 +110,39 @@ export function CraftPanel() {
           );
         })}
       </div>
+      {g.player.hasRaft && <HoldUpgrade />}
     </Panel>
+  );
+}
+
+/** 工作台上加固货舱：木头够了就能做，每次多几格 */
+function HoldUpgrade() {
+  const g = useGame();
+  const store = useStore();
+  const cost = buildCost(g, 'holdUpgrade');
+  if (!cost) return null;
+  const isl = here(g);
+  const src = canUseStock(isl) ? isl : undefined;
+  const ok = canPay(g, src, cost);
+  return (
+    <div className="recipe">
+      <span className="big">
+        <ItemIcon id="wood" />
+      </span>
+      <div>
+        <div>{t('ui.holdUpgrade', { from: g.player.holdCap, to: g.player.holdCap + BALANCE.home.holdUpgrade.step })}</div>
+        <div className="ins">
+          {Object.entries(cost).map(([id, n]) => (
+            <span key={id} className={costAvailable(g, src, id as ItemId) >= (n ?? 0) ? '' : 'lack'}>
+              <ItemName id={id as ItemId} /> {Math.min(costAvailable(g, src, id as ItemId), 99)}/{n}
+            </span>
+          ))}
+        </div>
+      </div>
+      <button className="u-btn" disabled={!ok} onClick={() => store.dispatch({ t: 'build', what: 'holdUpgrade' })}>
+        {t('ui.make')}
+      </button>
+    </div>
   );
 }
 
@@ -162,19 +195,6 @@ export function ChestPanel() {
           <p className="u-dim">{t('ui.stockRule')}</p>
         </div>
       </div>
-    </Panel>
-  );
-}
-
-/** 灯塔：主岛自带，显示照亮半径 */
-export function LighthousePanel() {
-  const g = useGame();
-  const isl = here(g);
-  const r = isl?.kind === 'home' ? BALANCE.map.homeLightRadius : BALANCE.map.lighthouseRadius[Math.max(0, (isl?.level ?? 1) - 1)];
-  return (
-    <Panel title={t('thing.lighthouse')}>
-      <p>{t('ui.lighthouseOn', { r })}</p>
-      <p className="u-dim">{t('ui.lighthouseHint')}</p>
     </Panel>
   );
 }
@@ -294,6 +314,10 @@ export function PanelHost() {
       return <WreckPanel />;
     case 'journal':
       return <JournalPanel />;
+    case 'talk':
+      return <TalkPanel />;
+    case 'map':
+      return <MapPanel />;
     case 'help':
       return <HelpPanel />;
     case 'menu':

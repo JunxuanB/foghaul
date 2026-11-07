@@ -19,7 +19,7 @@
 | `src/art/draw.ts` 的 `allSprites()` | 合并 `MOD_SPRITES`，启动时和内置精灵一起烘焙成纹理 |
 | `src/i18n/index.ts` 的 `t()` | 内置词典查不到时查 `MOD_STRINGS` |
 | `src/config/buildings.ts` 的 `OBJ_DEFS` | MOD 的物体定义直接合并进来（种类、碰撞底座、互动范围） |
-| `src/config/maps.ts` 的 `MAPS` | MOD 的地图模板直接合并进来 |
+| `src/config/maps.ts` 的 `MAPS` | MOD 的地图模板直接合并进来。注意：`templateFor(id)` 按岛 id 找模板，而岛还不能由 MOD 加（见下），所以现在 MOD 的地图模板只能给以后的新岛用 |
 | `GameState.mods` | 这一局加载了哪些 MOD |
 | `tests/mods.test.ts` | 注册、命名空间检查、全加或不加 |
 

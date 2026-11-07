@@ -177,6 +177,7 @@ button.u-slot:hover { border-color: var(--c5); }
 .pop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: calc(var(--k) * 160px); text-align: center; pointer-events: auto;
   padding: calc(var(--k) * 8px) calc(var(--k) * 10px) calc(var(--k) * 9px); }
 .pop .big { width: calc(var(--k) * 48px); height: calc(var(--k) * 48px); display: block; margin: calc(var(--k) * 4px) auto; }
+.pop .big img { width: 100%; height: 100%; display: block; }
 .pop p { margin: 0 0 calc(var(--k) * 4px); font-size: calc(var(--k) * 5px); color: var(--c6); line-height: 1.5; }
 .pop .eq { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(var(--k) * 3px); font-size: calc(var(--k) * 5px); color: var(--c6); margin: calc(var(--k) * 3px) 0; }
 
@@ -226,7 +227,31 @@ button.u-slot:hover { border-color: var(--c5); }
 .u-slot .hk { position: absolute; left: calc(var(--k) * 1px); top: 0; font-style: normal; font-size: calc(var(--k) * 4.5px); line-height: 1.2;
   color: var(--c5); text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--c0); }
 .u-slot.sel .hk { color: var(--c11); }
-/* 右下角：快捷栏选中的物品 */
-.hud-br { position: absolute; right: calc(var(--k) * 6px); bottom: calc(var(--k) * 5px); }
+/* 右下角：海上的图例、快捷栏选中的物品（从下往上排，位置固定） */
+.hud-br { position: absolute; right: calc(var(--k) * 6px); bottom: calc(var(--k) * 5px); display: grid; gap: calc(var(--k) * 2px); justify-items: end; }
+.legend { display: grid; gap: calc(var(--k) * 1px); font-size: calc(var(--k) * 5px); padding: calc(var(--k) * 2px) calc(var(--k) * 4px); }
+.legend span { display: flex; align-items: center; gap: calc(var(--k) * 2px); }
+.legend .sw { display: inline-block; width: calc(var(--k) * 6px); height: calc(var(--k) * 6px); box-shadow: 0 0 0 calc(var(--k) * 1px) var(--c0); }
+.legend .sw.fog { background: repeating-conic-gradient(var(--c6) 0 25%, var(--c5) 0 50%); background-size: calc(var(--k) * 2px) calc(var(--k) * 2px); }
+.legend .sw.open { background: var(--c2); }
+.legend .sw.seen { background: var(--c3); box-shadow: inset calc(var(--k) * 1px) calc(var(--k) * 1px) 0 0 var(--c4), 0 0 0 calc(var(--k) * 1px) var(--c0); }
+.towards { margin-top: calc(var(--k) * 2px); font-size: calc(var(--k) * 5px); color: var(--w11); text-align: right;
+  text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--w0); }
+/* 海上的岛名 */
+.w-label { position: absolute; transform: translate(-50%, 0); font-size: calc(var(--k) * 5px); color: var(--w7); white-space: nowrap; letter-spacing: 0.06em;
+  text-shadow: calc(var(--k) * 1px) 0 0 var(--w0), calc(var(--k) * -1px) 0 0 var(--w0), 0 calc(var(--k) * 1px) 0 var(--w0), 0 calc(var(--k) * -1px) 0 var(--w0); }
+.w-label.dim { color: var(--c5); }
+/* 海图 */
+.chart { position: relative; align-self: center; line-height: 0; }
+.chart canvas { image-rendering: pixelated; cursor: pointer; box-shadow: 0 0 0 calc(var(--k) * 1px) var(--c3); }
+.chart-name { position: absolute; transform: translate(-50%, 0); line-height: 1.2; font-size: calc(var(--k) * 4.5px); color: var(--c10); white-space: nowrap; pointer-events: none;
+  text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--c0); }
+.chart-name.own { color: var(--c11); }
+.legend-sw { display: inline-block; width: calc(var(--k) * 5px); height: calc(var(--k) * 5px); box-shadow: 0 0 0 calc(var(--k) * 1px) var(--c4); }
+/* 海上战斗的小卡片 */
+.fight { position: absolute; left: 50%; top: calc(var(--k) * 40px); transform: translateX(-50%); text-align: center; min-width: calc(var(--k) * 110px); }
+.fight b { font-weight: 400; color: var(--c11); display: block; font-size: calc(var(--k) * 6px); }
+.fight .vs { display: flex; justify-content: center; gap: calc(var(--k) * 6px); font-size: calc(var(--k) * 5px); color: var(--c6); margin-top: calc(var(--k) * 1px); }
+.fight .res { margin-top: calc(var(--k) * 1px); font-size: calc(var(--k) * 5px); }
 .sel-card { display: flex; align-items: center; gap: calc(var(--k) * 4px); font-size: calc(var(--k) * 5px); padding: calc(var(--k) * 2px) calc(var(--k) * 4px); }
 .sel-card .keyhint { display: flex; align-items: center; gap: calc(var(--k) * 1.5px); color: var(--c6); }

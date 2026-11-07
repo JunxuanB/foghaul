@@ -7,15 +7,23 @@ import { minuteOfDay } from './clock';
 import { carried } from './inventory';
 import { m, type Msg } from './msg';
 import type { GameState } from './types';
-import { island, stockGet } from './util';
+import { findIsland, island, stockGet } from './util';
+import { ISLANDS, REVEALS } from '../config/world';
+import { whereMsg } from './hints';
 
 const RAFT_WOOD = RECIPES.raft.inputs.wood ?? 0;
+/** 第一座要去的岛和那里的同伴（REVEALS 的第一条） */
+const FIRST_ISLAND = REVEALS[0].island;
+const FIRST_DEF = ISLANDS.find((x) => x.id === FIRST_ISLAND)!;
+const FIRST_NEED = FIRST_DEF.rescueNeed?.[0]?.n ?? 0;
+const isl = (s: GameState, id: string) => findIsland(s, id);
+const rescued = (s: GameState) => !!s.people.find((p) => p.role === FIRST_DEF.passenger)?.active;
 
 function wood(s: GameState): number {
   return carried(s, 'wood') + stockGet(island(s, 'home').stock, 'wood');
 }
 
-export type GuideTarget = { kind: 'object'; obj: ObjKind } | { kind: 'player' } | { kind: 'ui'; id: string };
+export type GuideTarget = { kind: 'object'; obj: ObjKind } | { kind: 'player' } | { kind: 'ui'; id: string } | { kind: 'island'; id: string };
 
 export interface GuideStep {
   id: string;
@@ -24,6 +32,8 @@ export interface GuideStep {
   done: (s: GameState) => boolean;
   /** 说明（目标卡第二行） */
   detail: (s: GameState) => Msg;
+  /** 目标物体在哪座岛上（人在海上或别的岛时，引导箭头先指向这座岛） */
+  at?: string;
 }
 
 export const GUIDE: GuideStep[] = [
@@ -54,6 +64,29 @@ export const GUIDE: GuideStep[] = [
   },
   { id: 'raft', target: { kind: 'object', obj: 'workbench' }, done: (s) => s.player.hasRaft, detail: () => m('guide.raft.d') },
   { id: 'vitals', target: { kind: 'ui', id: 'vitals' }, done: (s) => s.guide.vitalsSeen, detail: () => m('guide.vitals.d') },
+  // 7–11：出海、找到石头岛、靠岸、救工程师、修灯塔（M2）
+  { id: 'setSail', target: { kind: 'object', obj: 'dock' }, at: 'home', done: (s) => s.stats.moves > 0 || !s.player.at || rescued(s), detail: () => m('guide.setSail.d') },
+  {
+    id: 'toStone',
+    target: { kind: 'island', id: FIRST_ISLAND },
+    done: (s) => isl(s, FIRST_ISLAND)?.discovered === true || rescued(s),
+    detail: (s) => whereMsg(s, FIRST_ISLAND, 'home'),
+  },
+  { id: 'dockStone', target: { kind: 'island', id: FIRST_ISLAND }, done: (s) => s.player.at === FIRST_ISLAND || rescued(s), detail: () => m('guide.dockStone.d') },
+  {
+    id: 'engineer',
+    target: { kind: 'object', obj: 'npc' },
+    at: FIRST_ISLAND,
+    done: rescued,
+    detail: (s) => m('guide.engineer.d', { have: Math.min(carried(s, 'fish'), FIRST_NEED), n: FIRST_NEED }),
+  },
+  {
+    id: 'stoneLighthouse',
+    target: { kind: 'object', obj: 'lighthouse' },
+    at: FIRST_ISLAND,
+    done: (s) => !!isl(s, FIRST_ISLAND)?.buildings.lighthouse,
+    detail: () => m('guide.stoneLighthouse.d'),
+  },
 ];
 
 /** 晚上插入的一步 */

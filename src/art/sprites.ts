@@ -518,6 +518,45 @@ export function spSign(): G {
   return g.outline();
 }
 
+/** 灯塔地基：一圈石头基座、一摞木板和一块木牌（修好后换成灯塔） */
+export function spLighthouseBase(): G {
+  const g = new G(30, 22);
+  g.ell(15, 20, 14, 2, 'z');
+  g.ellS(15, 16, 12, 4.5, 's', { tex: 2.2, amp: 0.6, seed: 41 });
+  g.ell(15, 15, 7, 2.2, 's0');
+  // 木板
+  for (const [x, y] of [[3, 11], [5, 9]]) {
+    g.rect(x, y, 9, 2, 'w2');
+    g.rect(x, y, 9, 1, 'w3');
+    g.rect(x + 8, y, 1, 2, 'w1');
+  }
+  // 木牌
+  g.cyl(23, 6, 2, 10, 'w', [1, 0]);
+  g.rect(19, 2, 10, 6, 'w2');
+  g.rect(19, 2, 10, 1, 'w3');
+  g.rect(19, 7, 10, 1, 'w0');
+  g.rect(21, 4, 6, 1, 'x1');
+  return g.outline();
+}
+
+/** 村落的请求板：两根柱子、一块板，钉着几张纸 */
+export function spBoard(): G {
+  const g = new G(22, 22);
+  g.ell(11, 20.5, 9, 1.6, 'z');
+  g.cyl(3, 6, 2, 14, 'w', [1, 0]);
+  g.cyl(17, 6, 2, 14, 'w', [1, 0]);
+  g.rect(1, 3, 20, 11, 'w2');
+  g.rect(1, 3, 20, 1, 'w3');
+  g.rect(1, 13, 20, 1, 'w0');
+  g.rect(20, 3, 1, 11, 'w1');
+  for (const [x, y] of [[4, 5], [10, 6], [15, 5]]) {
+    g.rect(x, y, 4, 5, 'e3');
+    g.rect(x, y + 4, 4, 1, 'e1');
+    g.set(x + 1, y, 'x1');
+  }
+  return g.outline();
+}
+
 // ---------------------------------------------------------------- 人物
 
 interface CharDef {
@@ -758,5 +797,75 @@ export function spChar(d: CharDef, dir: Dir, f: number, pose?: 'up' | 'down'): G
       S.rect(side ? 3 : 1, by + 5, 3, 1, 'w3');
     }
   }
+  return g.outline();
+}
+
+// ---------------------------------------------------------------- 海上用的小号素材（从设计稿 B 移植）
+
+export function spMiniLight(): G {
+  const g = new G(11, 22);
+  g.ell(5.5, 20, 5, 1.4, 'z');
+  g.ellS(5.5, 18.5, 4.5, 2, 's');
+  for (let y = 6; y < 18; y++) {
+    const band = Math.floor((y - 6) / 3) % 2, half = 2 + (y - 6) * 0.12;
+    for (let x = Math.round(5.5 - half); x < Math.round(5.5 + half); x++) g.set(x, y, (band ? 'x' : 'e') + (x > 5 ? 1 : 2));
+  }
+  g.rect(3, 3, 5, 3, 'y1');
+  g.rect(3, 3, 5, 1, 'm0');
+  g.rect(2, 6, 7, 1, 'm0');
+  g.rect(4, 1, 3, 2, 'x1');
+  g.meta = { lamp: [5, 4] };
+  return g.outline();
+}
+
+export function spMiniHouse(): G {
+  const g = new G(15, 13);
+  g.ell(7.5, 12, 7, 1.2, 'z');
+  g.rect(2, 6, 11, 5, 'c2');
+  g.rect(10, 6, 3, 5, 'c1');
+  for (let y = 1; y < 7; y++) {
+    const h = 1 + y * 1.1;
+    g.rect(Math.round(7.5 - h), y, Math.round(h * 2), 1, y % 2 ? 'r2' : 'r1');
+  }
+  g.rect(6, 8, 2, 3, 'w1');
+  g.set(4, 8, 'g1');
+  g.set(10, 8, 'g1');
+  return g.outline();
+}
+
+export function spMiniTree(seed: number): G {
+  const g = new G(9, 12);
+  g.ell(4.5, 10.8, 3.5, 1, 'z');
+  g.rect(4, 7, 2, 4, 'w1');
+  g.ellS(4.5, 4.5, 3.6, 4, 'l', { tex: 1.5, amp: 0.5, seed });
+  return g.outline();
+}
+
+/** 木筏（海上）：带帆，人坐在上面 */
+export function spMiniRaft(): G {
+  const g = new G(16, 15);
+  for (let i = 0; i < 4; i++) {
+    g.rect(2 + i * 3, 9, 3, 4, 'w2');
+    g.set(4 + i * 3, 9, 'w1');
+  }
+  g.rect(2, 12, 12, 1, 'w0');
+  g.rect(10, 1, 1, 9, 'w1');
+  for (let y = 2; y < 8; y++) g.rect(11, y, Math.max(1, Math.round((y - 1) * 0.7)), 1, 'n2');
+  g.rect(4, 4, 3, 1, 'i11');
+  g.set(5, 3, 'i10');
+  g.set(5, 5, 'i10');
+  g.rect(4, 6, 3, 3, 'i3');
+  g.set(8, 5, 'y1');
+  g.meta = { lantern: [8, 5] };
+  return g.outline();
+}
+
+/** 漂流物：一只木箱 */
+export function spFloat(): G {
+  const g = new G(9, 8);
+  g.rect(1, 2, 7, 4, 'w2');
+  g.rect(1, 2, 7, 1, 'w3');
+  g.rect(6, 2, 1, 4, 'w1');
+  g.line(1, 2, 7, 5, 'w1');
   return g.outline();
 }

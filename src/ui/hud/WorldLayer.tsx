@@ -14,6 +14,7 @@ export function WorldLayer() {
   const edgeRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLElement>(null);
   const popRefs = useRef(new Map<number, HTMLDivElement>());
+  const labelRefs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
     let raf = 0;
@@ -47,6 +48,14 @@ export function WorldLayer() {
         const p = (performance.now() - s.action.start) / (s.action.end - s.action.start);
         barRef.current.style.width = Math.max(0, Math.min(1, p)) * 100 + '%';
       }
+      for (const [id, el] of labelRefs.current) {
+        const p = a.labels[id];
+        el.style.display = p ? '' : 'none';
+        if (p) {
+          el.style.left = p.x * k + 'px';
+          el.style.top = p.y * k + 'px';
+        }
+      }
       const now = performance.now();
       for (const p of s.pops) {
         const el = popRefs.current.get(p.id);
@@ -66,6 +75,18 @@ export function WorldLayer() {
   const showPrompts = !v.panel && (v.prompts.length > 0 || v.action);
   return (
     <>
+      {v.labels.map((l) => (
+        <div
+          key={l.id}
+          className={'w-label' + (l.dim ? ' dim' : '')}
+          ref={(el) => {
+            if (el) labelRefs.current.set(l.id, el);
+            else labelRefs.current.delete(l.id);
+          }}
+        >
+          {t('island.' + l.id)}
+        </div>
+      ))}
       {showPrompts && (
         <div className="w-prompts" ref={promptRef}>
           {v.action ? (

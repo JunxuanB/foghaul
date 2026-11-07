@@ -29,7 +29,65 @@ export interface MapTemplate {
   forage: Record<'tree' | 'herb', { cx: number; cy: number; r: number }[]>;
   /** 外圈的雾：离中心的椭圆距离从 a 到 b 渐浓 */
   fog: [number, number];
+  /**
+   * 跟着存档变的物体放在哪（底边中点）：岛上的人、灯塔（没修时是地基）、
+   * 加入网络后出现的工作台和储物箱、村落的请求板。主岛这些是固定物体，不用槽位。
+   */
+  slots?: { npc?: [number, number][]; lighthouse?: [number, number]; workbench?: [number, number]; chest?: [number, number]; board?: [number, number] };
 }
+
+/** 没有专门模板的岛按种类用这些通用模板（M3 起再给每座岛做专门的模板）。装饰按群系在 world/templates.ts 里补 */
+export const GENERIC_MAPS: Record<'small' | 'village' | 'islet', Omit<MapTemplate, 'id'>> = {
+  // 乘客岛、原住民岛
+  small: {
+    w: 36,
+    h: 22,
+    island: { cx: 288, cy: 166, rx: 214, ry: 118, k: 170, noise: 18, noiseScale: 50, seed: 11 },
+    paths: [
+      [[300, 268], [300, 222], [340, 206]],
+      [[340, 206], [426, 150]],
+      [[300, 222], [226, 196], [176, 200]],
+    ],
+    pathWidth: 4.5,
+    dock: { x: 300, y: 262, w: 16, len: 74 },
+    spawn: [300, 270],
+    objects: [],
+    forage: { tree: [], herb: [] },
+    fog: [1.1, 1.38],
+    slots: { npc: [[344, 214], [372, 222], [320, 236]], lighthouse: [430, 140], workbench: [222, 190], chest: [172, 202] },
+  },
+  // 配方村、人力村、进出口局
+  village: {
+    w: 42,
+    h: 24,
+    island: { cx: 336, cy: 180, rx: 250, ry: 128, k: 180, noise: 18, noiseScale: 56, seed: 17 },
+    paths: [
+      [[340, 296], [340, 236], [300, 200]],
+      [[340, 236], [420, 214], [500, 160]],
+    ],
+    pathWidth: 5,
+    dock: { x: 340, y: 290, w: 16, len: 74 },
+    spawn: [340, 298],
+    objects: [['house', 220, 170], ['house', 440, 150], ['fire', 360, 214]],
+    forage: { tree: [], herb: [] },
+    fog: [1.1, 1.38],
+    slots: { npc: [[300, 216], [390, 230], [266, 244]], lighthouse: [520, 150], board: [318, 236] },
+  },
+  // 礁石（信标礁）
+  islet: {
+    w: 30,
+    h: 18,
+    island: { cx: 240, cy: 134, rx: 160, ry: 88, k: 150, noise: 14, noiseScale: 40, seed: 23 },
+    paths: [[[246, 212], [246, 170], [290, 130]]],
+    pathWidth: 4,
+    dock: { x: 246, y: 206, w: 14, len: 66 },
+    spawn: [246, 214],
+    objects: [['boulder', 170, 150], ['rock', 320, 170], ['rock', 200, 104]],
+    forage: { tree: [], herb: [] },
+    fog: [1.1, 1.38],
+    slots: { npc: [[270, 176]], lighthouse: [300, 120] },
+  },
+};
 
 export const MAPS: Record<string, MapTemplate> = {
   home: {

@@ -1,34 +1,27 @@
-// 岛上场景：人物走动、碰撞、镜头、选中面前的东西、按 E 互动、昼夜换色、灯光、雾。
+// 岛上场景：人物走动、碰撞、选中面前的东西、按 E 互动、采集动画、岛上的特效。
+// 镜头、特效画布、灯光、过渡、昼夜、切场景在 WorldScene 里（和海上场景共用）。
 // 规则全部走 store.dispatch；这里只负责“看见什么、按了什么”。
 import Phaser from 'phaser';
 import { allSprites, mkCanvas, px } from '../../art/draw';
 import { hash } from '../../art/noise';
-import { DAY, phaseAt } from '../../art/palette';
+import { DAY } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
 import { ANIM, LIGHTS, VIEW } from '../../config/visual';
-import { minuteOfDay } from '../../sim/clock';
 import { currentGuide } from '../../sim/guide';
 import { carried, slotView } from '../../sim/inventory';
-import { interactInfo, objectsOn } from '../../sim/interact';
-import { nodesOn } from '../../sim/forage';
+import { interactInfo, objectsOn, personOfObj } from '../../sim/interact';
 import type { Command, Facing, GameState } from '../../sim/types';
 import { island } from '../../sim/util';
-import { PAUSING_PANELS, type Prompt } from '../../store/view';
+import type { Prompt } from '../../store/view';
 import { canStand, FEET, layout, raster, rectDist, type Layout, type Raster, type Rect, type WorldObj } from '../../world/island';
-import { CTX_KEY, type GameCtx } from '../context';
-import { moveDir, onAction, type Action } from '../input/keys';
+import { moveDir, type Action } from '../input/keys';
 import { paintFog } from '../render/fog';
-import { paintMask, type Beam, type Spot } from '../render/mask';
-import { PalettePipeline } from '../render/PalettePipeline';
+import type { Beam, Spot } from '../render/mask';
+import { FX_PAD, WorldScene, type FxLayer, type Img } from './WorldScene';
 import { paintTerrain, waterFx } from '../world/terrain';
 import { Particles } from '../world/particles';
 import { fencePieces } from '../world/fence';
-
-type Img = Phaser.GameObjects.Image;
-
-/** 特效画布比画面每边大出的像素：两次重画之间镜头移动时边上不露空 */
-const FX_PAD = 16;
 
 const DIR_OF: Record<Facing, 'down' | 'up' | 'side'> = { down: 'down', up: 'up', left: 'side', right: 'side' };
 const FACE_VEC: Record<Facing, [number, number]> = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
@@ -50,8 +43,7 @@ function totals(state: GameState): Partial<Record<ItemId, number>> {
   return out;
 }
 
-export class IslandScene extends Phaser.Scene {
-  private ctx!: GameCtx;
+export class IslandScene extends WorldScene {
   private L!: Layout;
   private R!: Raster;
   private isl = 'home';
@@ -64,26 +56,16 @@ export class IslandScene extends Phaser.Scene {
   private flames = new Map<string, { tex: Phaser.Textures.CanvasTexture; img: Img }>();
   private glows = new Map<string, Img>();
   private hl!: Img;
-  private arrow!: Img;
   private raft: Img | null = null;
-  private under!: { tex: Phaser.Textures.CanvasTexture; img: Img };
-  private over!: { tex: Phaser.Textures.CanvasTexture; img: Img };
-  private fog!: { tex: Phaser.Textures.CanvasTexture; img: Img };
-  private mask!: Phaser.Textures.CanvasTexture;
+  private under!: FxLayer;
+  private over!: FxLayer;
+  private fog!: FxLayer;
   private fogImg!: ImageData;
-  private maskImg!: ImageData;
   private surf!: Float32Array;
   private glints!: Float32Array;
-  private pipe: PalettePipeline | null = null;
-  private t = 0;
-  private fxAcc = 1;
   private walkT = 0;
   private moving = false;
   private pending: { cmd: Command; obj: WorldObj } | null = null;
-  private off: (() => void) | null = null;
-  /** 点阵过渡：到 1 时执行 mid，再淡回 0 */
-  private fade: { t: number; mid: (() => void) | null } | null = null;
-  private deaths = 0;
   /** 采集动画：粒子、计时、被摇动的物体 */
   private parts = new Particles();
   private rseq = 1;
@@ -94,17 +76,24 @@ export class IslandScene extends Phaser.Scene {
     super('island');
   }
 
-  private get state(): GameState {
-    return this.ctx.store.state;
+  protected where(): string | null {
+    return this.isl;
   }
 
   create(): void {
-    this.ctx = this.registry.get(CTX_KEY) as GameCtx;
+    this.setupWorld();
     const s = this.state;
-    this.isl = 'home';
+    this.isl = s.player.at ?? 'home';
+    this.objImgs = new Map();
+    this.flames = new Map();
+    this.glows = new Map();
+    this.raft = null;
+    this.pending = null;
+    this.shaking = null;
+    this.parts = new Particles();
     if (s.walk.island !== this.isl) {
       const Ls = layout(this.isl, s.seed);
-      s.walk = { island: this.isl, x: Ls.spawn[0], y: Ls.spawn[1], facing: 'down', moved: s.walk.moved };
+      s.walk = { island: this.isl, x: Ls.spawn[0], y: Ls.spawn[1], facing: 'up', moved: s.walk.moved };
     }
     this.L = layout(this.isl, s.seed);
     this.R = raster(this.isl, s.seed);
@@ -118,9 +107,7 @@ export class IslandScene extends Phaser.Scene {
     this.under = this.fxCanvas('fx_under', -500);
     this.over = this.fxCanvas('fx_over', 50000);
     this.fog = this.fxCanvas('fx_fog', 60000);
-    this.mask = this.textures.exists('fx_mask') ? (this.textures.get('fx_mask') as Phaser.Textures.CanvasTexture) : this.textures.createCanvas('fx_mask', VIEW.w + 1, VIEW.h + 1)!;
     this.fogImg = this.fog.tex.context.createImageData(this.fog.tex.width, this.fog.tex.height);
-    this.maskImg = this.mask.context.createImageData(VIEW.w + 1, VIEW.h + 1);
 
     this.syncObjects();
     this.makeOverlays();
@@ -130,55 +117,27 @@ export class IslandScene extends Phaser.Scene {
       this.add.image(f.x, f.y, key).setOrigin(0, 0).setDepth(f.depth);
     }
     this.hl = this.add.image(0, 0, 'ui_arrow').setOrigin(0.5, 1).setVisible(false);
-    this.arrow = this.add.image(0, 0, 'ui_arrow').setOrigin(0.5, 1).setDepth(55000).setVisible(false);
     this.player = this.add.image(s.walk.x, s.walk.y + 1, 'ch_player_down_0').setOrigin(0.5, 1);
-
-    const cam = this.cameras.main;
-    cam.setRoundPixels(true);
-    cam.setPostPipeline(PalettePipeline);
-    const p = cam.getPostPipeline(PalettePipeline);
-    this.pipe = (Array.isArray(p) ? p[0] : p) as PalettePipeline;
-    this.pipe.mask = this.mask;
-
-    this.off = onAction((a) => this.onAction(a));
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off?.());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.off?.());
-    this.deaths = s.stats.deaths;
     this.lastX = s.walk.x;
     this.lastY = s.walk.y;
     this.placeCamera();
-    // 所有纹理都按最近邻采样（像素画放大、移动时不糊）
-    for (const key of this.textures.getTextureKeys()) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
-  }
-
-  /**
-   * 特效层（浪花、雾、炊烟……）：比画面大一圈的画布，按世界坐标摆放。
-   * 每 1/30 秒重画一次，重画之间它跟着世界一起动，不会贴在屏幕上“游”。
-   */
-  private fxCanvas(key: string, depth: number): { tex: Phaser.Textures.CanvasTexture; img: Img } {
-    const P = FX_PAD;
-    const tex = this.textures.exists(key) ? (this.textures.get(key) as Phaser.Textures.CanvasTexture) : this.textures.createCanvas(key, VIEW.w + P * 2, VIEW.h + P * 2)!;
-    const img = this.add.image(0, 0, key).setOrigin(0, 0).setDepth(depth);
-    return { tex, img };
+    this.finishSetup();
   }
 
   // ---------------------------------------------------------------- 输入
 
-  private onAction(a: Action): void {
-    const v = this.ctx.view;
-    const panel = v.s.panel;
-    if (a === 'close') {
-      if (this.pending) return this.cancelAction();
-      v.set({ panel: panel ? null : 'menu' });
-      return;
-    }
-    if (a === 'inventory') return v.set({ panel: panel === 'inventory' ? null : 'inventory' });
-    if (a === 'journal') return v.set({ panel: panel === 'journal' ? null : 'journal' });
-    if (a === 'help') return v.set({ panel: panel === 'help' ? null : 'help' });
-    if (panel || this.pending) return;
-    if (a.startsWith('slot')) return v.set({ hotbar: Number(a.slice(4)) - 1 });
+  protected onAction(a: Action): void {
+    if (a === 'close' && this.pending) return this.cancelAction();
+    if (this.panelAction(a)) return;
+    if (this.ctx.view.s.panel || this.pending || this.fading) return;
     if (a === 'use') return this.useHotbar();
     if (a === 'interact') return this.interact();
+    // 站在水边按 Z 喝海水
+    if (a === 'drink') this.ctx.store.dispatch({ t: 'drinkSea' });
+  }
+
+  protected onDied(): void {
+    this.cancelAction();
   }
 
   private useHotbar(): void {
@@ -214,6 +173,12 @@ export class IslandScene extends Phaser.Scene {
         return v.set({ panel: 'lighthouse' });
       case 'wreck':
         return v.set({ panel: 'wreck' });
+      case 'npc':
+        return v.set({ panel: 'talk', talkTo: personOfObj(this.state, o.id)?.id ?? null });
+      case 'dock':
+        // 出海：点阵变黑，离岛，换到海上场景
+        this.fadeThrough(() => this.ctx.store.dispatch({ t: 'leave' }));
+        return;
       case 'bed':
         this.fadeThrough(() => {
           this.ctx.store.dispatch({ t: 'sleep' });
@@ -221,24 +186,6 @@ export class IslandScene extends Phaser.Scene {
         });
         return;
     }
-  }
-
-  private fadeThrough(mid: () => void): void {
-    if (this.fade) return;
-    this.fade = { t: 0, mid };
-  }
-
-  private stepFade(dt: number): void {
-    const f = this.fade;
-    if (!f) return;
-    f.t += dt / ANIM.fadeSeconds;
-    if (f.t >= 1 && f.mid) {
-      const mid = f.mid;
-      f.mid = null;
-      mid();
-    }
-    if (f.t >= 2) this.fade = null;
-    if (this.pipe) this.pipe.fade = this.fade ? (f.t < 1 ? f.t : 2 - f.t) : 0;
   }
 
   private cancelAction(): void {
@@ -330,20 +277,10 @@ export class IslandScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 每帧
 
   update(_time: number, delta: number): void {
+    if (!this.tickWorld(delta)) return;
     const dt = Math.min(delta, 100) / 1000;
-    this.t += dt;
-    const { store, view } = this.ctx;
-    store.hold('panel', !!view.s.panel && PAUSING_PANELS.includes(view.s.panel));
-    store.frame(delta);
+    const { view } = this.ctx;
     const s = this.state;
-    this.stepFade(dt);
-    // 死亡：在床边醒来，用点阵过渡
-    if (s.stats.deaths !== this.deaths) {
-      this.fadeThrough(() => undefined);
-      this.deaths = s.stats.deaths;
-      this.cancelAction();
-    }
-
     if (this.pending && performance.now() >= (view.s.action?.end ?? 0)) this.finishAction();
     this.animateAction(dt);
     this.parts.step(dt);
@@ -354,28 +291,19 @@ export class IslandScene extends Phaser.Scene {
     this.updateIntro();
     this.updateGuide();
     this.updateObjects();
-
-    // 昼夜
-    const minute = view.s.debugMinute ?? minuteOfDay(s.time);
-    const ph = phaseAt(minute);
-    if (this.pipe) this.pipe.mix = ph;
-
+    view.setIfChanged('labels', []);
     this.fxAcc += dt;
     if (this.fxAcc >= ANIM.fxInterval) {
       this.fxAcc = 0;
-      this.drawFx(ph.s);
+      this.drawFx(this.phase.s);
     }
     view.s.anchors.player = { x: this.snap(s.walk.x, this.camX) - this.camX, y: this.snap(s.walk.y, this.camY) - this.camY };
-    // 灯光遮罩按屏幕对齐，每帧重画（只在天暗时）
-    this.paintLights(ph.s);
+    this.paintLights();
   }
 
   /** 上一帧人物的位置（行走帧按距离换） */
   private lastX = 0;
   private lastY = 0;
-  /** 镜头左上角在世界里的位置（游戏像素，可以是小数） */
-  private camX = 0;
-  private camY = 0;
 
   /**
    * 走路：连续坐标，任何方向都是同样的速度（斜着走不会更快）。
@@ -385,7 +313,7 @@ export class IslandScene extends Phaser.Scene {
   private walk(dt: number): void {
     const s = this.state;
     const w = s.walk;
-    const blocked = !!this.ctx.view.s.panel || !!this.pending || !!this.fade || !this.ctx.store.running;
+    const blocked = !!this.ctx.view.s.panel || !!this.pending || this.fading || !this.ctx.store.running;
     let [dx, dy] = blocked ? [0, 0] : moveDir();
     this.moving = dx !== 0 || dy !== 0;
     if (!this.moving) return;
@@ -404,18 +332,9 @@ export class IslandScene extends Phaser.Scene {
     if (moved === 0) this.moving = false;
   }
 
-  /** 镜头跟着人物，在地图边缘停住；位置对齐到屏幕像素（1/k 游戏像素） */
   private placeCamera(): void {
     const w = this.state.walk;
-    const cam = this.cameras.main;
-    const k = this.ctx.view.s.k;
-    if (cam.zoom !== k) cam.setZoom(k);
-    if (this.pipe) this.pipe.scale = k;
-    const x = Math.max(0, Math.min(this.L.pw - VIEW.w, w.x - VIEW.w / 2));
-    const y = Math.max(0, Math.min(this.L.ph - VIEW.h, w.y - 16 - VIEW.h / 2));
-    this.camX = Math.round(x * k) / k;
-    this.camY = Math.round(y * k) / k;
-    cam.centerOn(this.camX + VIEW.w / 2, this.camY + VIEW.h / 2);
+    this.placeCameraOn(w.x, w.y - 16, this.L.pw, this.L.ph);
   }
 
   /**
@@ -439,12 +358,6 @@ export class IslandScene extends Phaser.Scene {
     this.player.setDepth(w.y);
     this.lastX = w.x;
     this.lastY = w.y;
-  }
-
-  /** 世界坐标对齐到屏幕像素：镜头左上角 + 整数个屏幕像素 */
-  private snap(v: number, cam: number): number {
-    const k = this.ctx.view.s.k;
-    return cam + Math.round((v - cam) * k) / k;
   }
 
   /** 选出人物前方 reach 以内最近的一个可互动物体，更新按键提示 */
@@ -497,8 +410,9 @@ export class IslandScene extends Phaser.Scene {
       const img = o ? this.objImgs.get(o.id) : undefined;
       if (o) {
         // 物体在人物下方时卡片放在物体旁边（不挡人物，也不挡物体周围），否则放在物体上方
-        const below = o.y > s.walk.y + 4;
         const top = img ? img.y - img.height : o.y - 16;
+        // 卡片放在物体上方会顶到画面上沿的 HUD（高的东西，比如灯塔）时也放旁边
+        const below = o.y > s.walk.y + 4 || top - this.camY < BALANCE.ui.introTopMin;
         const half = img ? img.width / 2 : 8;
         const side = o.x - this.camX < VIEW.w / 2 ? 1 : -1;
         v.s.anchors.intro = below
@@ -533,7 +447,7 @@ export class IslandScene extends Phaser.Scene {
     return best;
   }
 
-  /** 引导：目标物体头顶上下跳动的箭头；不在屏幕里时屏幕边缘指个方向 */
+  /** 引导：目标物体头顶上下跳动的箭头；不在屏幕里时屏幕边缘指个方向（WorldScene.pointAt） */
   private updateGuide(): void {
     const s = this.state;
     const v = this.ctx.view;
@@ -542,48 +456,32 @@ export class IslandScene extends Phaser.Scene {
     let ty = 0;
     let uiTarget: string | null = null;
     if (step && !v.s.panel) {
-      if (step.target.kind === 'player') {
+      const t = step.target;
+      if (t.kind === 'player') {
         tx = s.walk.x;
         ty = s.walk.y - 34;
-      } else if (step.target.kind === 'object') {
-        const o = this.nearestOfKind(step.target.obj);
+      } else if (t.kind === 'object' || (t.kind === 'island' && t.id !== this.isl)) {
+        // 目标在别的岛上：先去码头
+        const elsewhere = (t.kind === 'island' && t.id !== this.isl) || (t.kind === 'object' && !!step.at && step.at !== this.isl);
+        const o = this.nearestOfKind(elsewhere ? 'dock' : t.kind === 'object' ? t.obj : 'dock');
         if (o) {
           const img = this.objImgs.get(o.id);
           tx = o.x;
           ty = img ? img.y - img.height - 2 : o.hit ? o.hit.y - 4 : o.y - 16;
         }
-      } else uiTarget = step.target.id;
+      } else if (t.kind === 'ui') uiTarget = t.id;
     }
-    if (v.s.anchors.uiTarget !== uiTarget) {
-      v.s.anchors.uiTarget = uiTarget;
-      v.set({});
-    }
-    if (tx === null) {
-      this.arrow.setVisible(false);
-      v.s.anchors.edge = null;
-      return;
-    }
-    const bob = Math.round(Math.sin(this.t * 5) * 1.5);
-    const sx = tx - this.camX;
-    const sy = ty - this.camY;
-    const inView = sx > 8 && sx < VIEW.w - 8 && sy > 10 && sy < VIEW.h - 4;
-    this.arrow.setVisible(inView).setPosition(Math.round(tx), Math.round(ty) + bob);
-    if (inView) v.s.anchors.edge = null;
-    else {
-      const cx = VIEW.w / 2;
-      const cy = VIEW.h / 2;
-      const ang = Math.atan2(sy - cy, sx - cx);
-      const k = Math.min((cx - 14) / Math.abs(Math.cos(ang) || 1e-6), (cy - 14) / Math.abs(Math.sin(ang) || 1e-6));
-      const dist = Math.round(Math.hypot(tx - s.walk.x, ty - s.walk.y) / 16);
-      v.s.anchors.edge = { x: cx + Math.cos(ang) * k, y: cy + Math.sin(ang) * k, angle: ang, dist };
-    }
+    this.setUiTarget(uiTarget);
+    this.pointAt(tx, ty, s.walk.x, s.walk.y);
   }
 
   /** 物体和存档同步：今天的树和草药（长出、采完变树桩、第二天清掉）、木筏 */
   private syncObjects(): void {
     const s = this.state;
     this.objs = objectsOn(s, this.isl);
-    this.blockers = this.objs.filter((o) => o.foot && nodesOn(s, this.isl).some((n) => n.id === o.id)).map((o) => o.foot!);
+    // 固定物体的底座已经在 Raster 的可走遮罩里；其余（采集点、岛上的人、灯塔、加入网络后的建筑）每帧单独挡
+    const fixed = new Set(this.L.objects.map((o) => o.id));
+    this.blockers = this.objs.filter((o) => o.foot && !fixed.has(o.id)).map((o) => o.foot!);
     const S = allSprites();
     const seen = new Set<string>();
     for (const o of this.objs) {
@@ -674,17 +572,13 @@ export class IslandScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 画面特效
 
-  /** 灯光的位置（世界坐标，已乘灯光强度），每 1/30 秒随特效一起更新 */
-  private spots: Spot[] = [];
-  private beams: Beam[] = [];
 
   /**
    * 特效层按世界坐标画：画布左上角 = 镜头左上角往外 FX_PAD 像素，画完把图片摆到那个位置。
    * 两次重画之间，特效跟着世界一起动（浪花、雾不会贴在屏幕上来回“游”）。
    */
   private drawFx(strength: number): void {
-    const cx = Math.floor(this.camX) - FX_PAD;
-    const cy = Math.floor(this.camY) - FX_PAD;
+    const [cx, cy] = this.fxOrigin();
     const t = this.t;
     const P = DAY;
     const W = VIEW.w + FX_PAD * 2;
@@ -825,26 +719,12 @@ export class IslandScene extends Phaser.Scene {
     this.fog.tex.refresh();
     this.fog.img.setPosition(cx, cy);
 
-    // 灯光的位置换成世界坐标，遮罩每帧按镜头画（paintLights）
+    // 灯光的位置换成世界坐标，遮罩每帧按镜头画（WorldScene.paintLights）
     this.spots = spots.map(([x, y, r]) => [x + cx, y + cy, r]);
     this.beams = beams.map(([x, y, l, a, hw]) => [x + cx, y + cy, l, a, hw]);
   }
 
-  /** 灯光遮罩和屏幕对齐（着色器按屏幕坐标读它），所以每帧按当前镜头重画 */
-  private paintLights(strength: number): void {
-    const useMask = strength > LIGHTS.maskFrom;
-    if (this.pipe) this.pipe.useMask = useMask;
-    if (!useMask) return;
-    const cx = Math.floor(this.camX);
-    const cy = Math.floor(this.camY);
-    if (this.pipe) this.pipe.maskOff = [this.camX - cx, this.camY - cy];
-    paintMask(
-      this.maskImg,
-      this.spots.map(([x, y, r]) => [x - cx, y - cy, r]),
-      this.beams.map(([x, y, l, a, hw]) => [x - cx, y - cy, l, a, hw]),
-    );
-    this.mask.context.putImageData(this.maskImg, 0, 0);
-    this.mask.refresh();
-  }
+
+
 }
 

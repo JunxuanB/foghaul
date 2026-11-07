@@ -34,6 +34,7 @@ export function combat(state: GameState, foe: 'bees' | 'shark', strength: number
   const mine = f * (1 - c.roll + rand(state) * 2 * c.roll);
   const theirs = strength * (1 - c.roll + rand(state) * 2 * c.roll);
   const foeM = m('foe.' + foe);
+  state.lastFight = { foe, mine: Math.round(mine * 10) / 10, theirs: Math.round(theirs * 10) / 10, win: crit || mine >= theirs, at: state.time };
   if (crit || mine >= theirs) {
     state.stats.wins++;
     const lost = giveAtSea(state, drop);

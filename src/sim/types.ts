@@ -175,6 +175,19 @@ export interface Walk {
 export interface PendingCrate {
   loot: Stock;
   text: Msg | null;
+  /** 2D：漂流物在海面上的位置（像素）。文字版的格子移动不设 */
+  x?: number;
+  y?: number;
+}
+
+/** 最近一次海上战斗（界面用来显示一张小卡片） */
+export interface FightRecord {
+  foe: 'bees' | 'shark';
+  mine: number;
+  theirs: number;
+  win: boolean;
+  /** 发生的游戏时间 */
+  at: number;
 }
 
 export interface GameState {
@@ -214,6 +227,9 @@ export interface GameState {
   forageSeq: number;
   /** 开这一局时加载的 MOD（`id@版本`），以后读档时用来检查 */
   mods: string[];
+  /** 2D：木筏在海面上的位置（像素）。player.x / y 仍是它所在的格子 */
+  raft: { x: number; y: number };
+  lastFight: FightRecord | null;
   villages: Record<VillageId, VillageState>;
   flags: {
     farm: (number | null)[];
@@ -249,7 +265,8 @@ export type Where = 'pack' | 'hold' | 'stock';
 
 export type Command =
   | { t: 'move'; dx: number; dy: number }
-  | { t: 'dock' }
+  | { t: 'dock'; island?: string }
+  | { t: 'sail'; x: number; y: number }
   | { t: 'leave' }
   | { t: 'drinkSea' }
   | { t: 'fishSea' }

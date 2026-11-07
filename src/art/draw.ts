@@ -83,6 +83,18 @@ export function allSprites(): Record<string, G> {
     herbEmpty: S.spHerbBush(true),
     shoal: S.spShoal(),
     sign: S.spSign(),
+    lhBase: S.spLighthouseBase(),
+    board: S.spBoard(),
+    // 其他岛上装饰用的树（和主岛能采的树同一种画法）
+    tree_d: S.spTree(5, true),
+    stree_d: S.spTree(13, false),
+    // 海上的小号素材
+    mlight: S.spMiniLight(),
+    mhouse: S.spMiniHouse(),
+    mtree: S.spMiniTree(5),
+    mtree2: S.spMiniTree(9),
+    mraft: S.spMiniRaft(),
+    float: S.spFloat(),
   };
   for (const id of Object.keys(S.CHARS))
     for (const dir of WALK_DIRS) for (let f = 0; f < 4; f++) out[`ch_${id}_${dir}_${f}`] = S.spChar(S.CHARS[id], dir, f);

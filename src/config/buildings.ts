@@ -12,6 +12,8 @@ export type ObjKind =
   | 'wreck'
   | 'dock'
   | 'farm'
+  | 'npc'
+  | 'board'
   | 'decor';
 
 /** 相对底边中点的矩形：x、y 是左上角偏移 */
@@ -54,7 +56,13 @@ export const OBJ_DEFS: Record<string, ObjDef> = {
   net: { kind: 'decor', foot: { x: -18, y: -3, w: 36, h: 3 } },
   stump: { kind: 'decor', foot: { x: -6, y: -5, w: 12, h: 5 } },
   herbEmpty: { kind: 'decor' },
+  // 其他岛：灯塔地基、岛上的人（所有人物精灵共用一套范围）、村落的请求板、装饰用的树（不能采）
+  lhBase: { kind: 'lighthouse', foot: { x: -12, y: -7, w: 24, h: 7 }, hit: { x: -14, y: -10, w: 28, h: 10 } },
+  npc: { kind: 'npc', foot: { x: -4, y: -4, w: 8, h: 4 }, hit: { x: -8, y: -12, w: 16, h: 12 } },
+  board: { kind: 'board', foot: { x: -6, y: -4, w: 12, h: 4 }, hit: { x: -9, y: -8, w: 18, h: 8 } },
+  tree_d: { kind: 'decor', foot: { x: -5, y: -6, w: 10, h: 6 } },
+  stree_d: { kind: 'decor', foot: { x: -4, y: -5, w: 8, h: 5 } },
 };
 
 /** 每种互动对象的“初见介绍”和按键提示文字键：intro.<kind>、act.<kind> */
-export const INTERACTIVE: ObjKind[] = ['tree', 'shoal', 'herb', 'workbench', 'chest', 'bed', 'lighthouse', 'wreck', 'dock', 'farm'];
+export const INTERACTIVE: ObjKind[] = ['tree', 'shoal', 'herb', 'workbench', 'chest', 'bed', 'lighthouse', 'wreck', 'dock', 'farm', 'npc', 'board'];

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { allSprites, gridCanvas } from '../../art/draw';
 import { G } from '../../art/grid';
 import { OBJ_DEFS } from '../../config/buildings';
+import { CTX_KEY, type GameCtx } from '../context';
 
 /** 只保留描边、换成灯芯色：选中时叠在物体上 */
 function highlight(g: G): G {
@@ -35,10 +36,13 @@ export class BootScene extends Phaser.Scene {
     for (const [name, g] of Object.entries(S)) {
       if (!this.textures.exists(name)) this.textures.addCanvas(name, gridCanvas(g));
       const def = OBJ_DEFS[name];
-      if (def && def.kind !== 'decor' && !this.textures.exists(name + '_hl')) this.textures.addCanvas(name + '_hl', gridCanvas(highlight(g)));
+      // 能选中的东西（物体、岛上的人）要一张只有描边的图
+      const selectable = (def && def.kind !== 'decor') || /^ch_\w+_down_0$/.test(name);
+      if (selectable && !this.textures.exists(name + '_hl')) this.textures.addCanvas(name + '_hl', gridCanvas(highlight(g)));
     }
     if (!this.textures.exists('ui_arrow')) this.textures.addCanvas('ui_arrow', gridCanvas(arrow()));
     if (!this.textures.exists('ui_bang')) this.textures.addCanvas('ui_bang', gridCanvas(bang()));
-    this.scene.start('island');
+    const ctx = this.registry.get(CTX_KEY) as GameCtx;
+    this.scene.start(ctx.store.state.player.at ? 'island' : 'sea');
   }
 }

@@ -4,6 +4,7 @@ import { PALETTE, VIEW } from '../config/visual';
 import { PalettePipeline } from './render/PalettePipeline';
 import { BootScene } from './scenes/BootScene';
 import { IslandScene } from './scenes/IslandScene';
+import { SeaScene } from './scenes/SeaScene';
 import { CTX_KEY, type GameCtx } from './context';
 import { installKeys } from './input/keys';
 
@@ -37,7 +38,7 @@ export function startGame(parent: HTMLElement, frame: HTMLElement, ctx: GameCtx)
     callbacks: {
       preBoot: (g) => g.registry.set(CTX_KEY, ctx),
     },
-    scene: [BootScene, IslandScene],
+    scene: [BootScene, IslandScene, SeaScene],
   });
   const onResize = () => {
     const z = fitZoom(frame.clientWidth, frame.clientHeight);

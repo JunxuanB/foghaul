@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FEET, canStand, forageSpots, layout, raster, rectDist, T, TILE } from '../src/world/island';
 import { OBJ_DEFS } from '../src/config/buildings';
+import { ISLANDS } from '../src/config/world';
 import { BALANCE } from '../src/config/balance';
 
 /** 从出生点按 2 像素一步做洪水填充，返回能站到的点 */
@@ -33,6 +34,33 @@ function reachable(id: string, seed: number) {
   }
   return { L, R, W, S, seen };
 }
+
+describe('every island has a walkable map', () => {
+  for (const def of ISLANDS) {
+    if (def.id === 'home') continue;
+    it(`${def.id} (${def.kind}): dock, people, lighthouse and buildings are reachable`, () => {
+      const seed = 7;
+      const { L, R, W, S, seen } = reachable(def.id, seed);
+      expect(canStand(R, ...L.spawn)).toBe(true);
+      const reach = BALANCE.interact.reach;
+      const t = L.template;
+      const slotPts: [number, number][] = [...(t.slots?.npc ?? []), ...[t.slots?.lighthouse, t.slots?.workbench, t.slots?.chest, t.slots?.board].filter((x): x is [number, number] => !!x)];
+      const targets = [...L.objects.filter((o) => o.kind !== 'decor' && o.hit).map((o) => ({ id: o.id, r: o.hit! })), ...slotPts.map(([x, y], i) => ({ id: 'slot' + i, r: { x: x - 10, y: y - 10, w: 20, h: 10 } }))];
+      for (const o of targets) {
+        let ok = false;
+        for (let i = 0; i < seen.length && !ok; i++) {
+          if (!seen[i]) continue;
+          if (rectDist((i % W) * S + 1, ((i / W) | 0) * S + 1 + FEET.y / 2, o.r) <= reach) ok = true;
+        }
+        expect(ok, `${def.id} ${o.id} reachable`).toBe(true);
+      }
+      // 码头的外端在水里，槽位都在陆地上
+      const d = L.dock!;
+      expect(R.cls[Math.floor(d.y + d.h - 2) * R.w + Math.floor(d.x + d.w / 2)]).toBeLessThan(T.sand);
+      for (const [x, y] of slotPts) expect(R.cls[Math.floor(y - 2) * R.w + Math.floor(x)], `${def.id} slot ${x},${y} on land`).toBeGreaterThanOrEqual(T.sand);
+    });
+  }
+});
 
 describe('home island map', () => {
   for (const seed of [1, 42, 2026, 99991]) {

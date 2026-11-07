@@ -1,7 +1,8 @@
 // 岛屿地图生成（纯 TS，不依赖 Phaser / DOM）：规则层用 layout 判断“人物在不在东西旁边”，
 // 画面层用 raster 画地形和做碰撞。同一个模板 + 种子结果永远一样。
 import { OBJ_DEFS, type ObjKind, type RelRect } from '../config/buildings';
-import { MAPS, type MapTemplate } from '../config/maps';
+import type { MapTemplate } from '../config/maps';
+import { templateFor } from './templates';
 import { fbm, hash } from '../art/noise';
 import { BALANCE } from '../config/balance';
 
@@ -60,7 +61,7 @@ export function layout(id: string, seed: number): Layout {
   const key = id + ':' + seed;
   const hit = layouts.get(key);
   if (hit) return hit;
-  const t = MAPS[id];
+  const t = templateFor(id);
   if (!t) throw new Error('no map template ' + id);
   const objects: WorldObj[] = [];
   const count: Record<string, number> = {};
