@@ -71,6 +71,10 @@ export const ANIM = {
   gullFps: 4,
   /** 采集类动作的现实时长（秒） */
   actionSeconds: { branch: 1.0, chop: 1.2, shoreFish: 1.2, herb: 0.8, craft: 0.9 } as Record<string, number>,
+  /** 采集动作的节奏：每隔多久摇一下、掉一把叶子 / 浮漂沉一下（秒） */
+  gatherBeat: 0.35,
+  /** 浅滩钓点水纹一圈的时长（秒） */
+  rippleSeconds: 2.4,
   /** 头顶“+1”飘起的时长（秒） */
   popSeconds: 1.1,
   /** 点阵过渡的时长（秒）：睡觉、复活 */

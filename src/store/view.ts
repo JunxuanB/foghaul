@@ -40,7 +40,9 @@ export interface ViewState {
   /** 世界里的东西在屏幕上的位置（游戏像素） */
   anchors: {
     player: { x: number; y: number };
-    intro: { x: number; y: number } | null;
+    /** 选中的东西在人物上方时，按键提示放到脚下，不挡住它 */
+    promptBelow: boolean;
+    intro: { x: number; y: number; below: boolean; side: number } | null;
     /** 引导目标不在屏幕里时，指向它的边缘箭头 */
     edge: { x: number; y: number; angle: number; dist: number } | null;
     /** 引导高亮的界面元素 */
@@ -63,7 +65,7 @@ export class ViewStore {
     action: null,
     hotbar: 0,
     pops: [],
-    anchors: { player: { x: 0, y: 0 }, intro: null, edge: null, uiTarget: null },
+    anchors: { player: { x: 0, y: 0 }, promptBelow: false, intro: null, edge: null, uiTarget: null },
     k: 2,
     debugMinute: null,
   };

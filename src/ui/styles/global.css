@@ -207,3 +207,24 @@ button.u-slot:hover { border-color: var(--c5); }
 @media (prefers-reduced-motion: reduce) {
   .flash, .u-log div { animation: none; }
 }
+
+/* 岛上仓库：每种物品一行，数量/上限 */
+.stock-list { display: grid; gap: calc(var(--k) * 1px); }
+.stock-row {
+  display: grid; grid-template-columns: 1fr calc(var(--k) * 30px) calc(var(--k) * 22px); gap: calc(var(--k) * 3px); align-items: center;
+  background: var(--c0); border: calc(var(--k) * 1px) solid var(--c2); padding: calc(var(--k) * 1px) calc(var(--k) * 3px);
+  font-size: calc(var(--k) * 5px); text-align: left; cursor: pointer; color: var(--c7);
+}
+.stock-row:hover:not(:disabled) { border-color: var(--c5); }
+.stock-row:disabled { cursor: default; color: var(--c6); }
+.stock-row i { display: block; height: calc(var(--k) * 3px); background: var(--c1); position: relative; box-shadow: 0 0 0 calc(var(--k) * 1px) var(--c2); }
+.stock-row i::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--v) * 100%); background: var(--c5); }
+.stock-row span { text-align: right; color: var(--c6); }
+.stock-row span.full { color: var(--c10); }
+
+/* 快捷栏格子左上角的数字键 */
+.u-slot .hk { position: absolute; left: calc(var(--k) * 1px); top: 0; font-style: normal; font-size: calc(var(--k) * 4.5px); line-height: 1.2;
+  color: var(--c5); text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--c0); }
+.u-slot.sel .hk { color: var(--c11); }
+.hud-bc .q { align-self: center; display: flex; align-items: center; gap: calc(var(--k) * 1px); font-size: calc(var(--k) * 4.5px); color: var(--w6);
+  text-shadow: calc(var(--k) * 1px) calc(var(--k) * 1px) 0 var(--w0); margin-left: calc(var(--k) * 2px); }

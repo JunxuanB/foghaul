@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { BR, phaseAt } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
-import { ITEM_ORDER } from '../../config/items';
+import { ITEMS } from '../../config/items';
+import { slotView } from '../../sim/inventory';
 import { PHASES } from '../../config/visual';
 import { t, tm } from '../../i18n';
 import { dayOf, minuteOfDay } from '../../sim/clock';
@@ -154,12 +155,20 @@ function Hotbar() {
   const show = has(g, 'hotbar');
   const f = useFlash(show);
   if (!show) return null;
-  const items = ITEM_ORDER.filter((id) => (g.player.pack[id] ?? 0) > 0).slice(0, 5);
+  const slots = slotView(g.player.pack).slots;
+  const cur = slots[v.hotbar];
+  const edible = !!cur && !!ITEMS[cur.id].eat;
   return (
     <div className={'hud-bc' + f}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <Slot key={i} id={items[i]} n={items[i] ? g.player.pack[items[i]] : undefined} sel={v.hotbar === i} onClick={() => vs.set({ hotbar: i })} />
+      {Array.from({ length: BALANCE.ui.hotbarSlots }, (_, i) => (
+        <Slot key={i} hotkey={String(i + 1)} id={slots[i]?.id} n={slots[i]?.n} sel={v.hotbar === i} onClick={() => vs.set({ hotbar: i })} />
       ))}
+      {edible && (
+        <span className="q">
+          <span className="u-key">Q</span>
+          {t(ITEMS[cur.id].verb === 'drink' ? 'ui.drinkIt' : ITEMS[cur.id].verb === 'use' ? 'ui.useIt' : 'ui.eatIt')}
+        </span>
+      )}
     </div>
   );
 }

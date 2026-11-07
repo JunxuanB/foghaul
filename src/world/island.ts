@@ -174,6 +174,7 @@ export function raster(id: string, seed: number): Raster {
     }
   if (L.dock) fill(walk, W, H, L.dock, 1);
   for (const o of L.objects) if (o.foot) fill(walk, W, H, o.foot, 0);
+  for (const r of fenceRects(t)) fill(walk, W, H, r, 0);
   const TW = t.w;
   const TH = t.h;
   const tiles = new Uint8Array(TW * TH);
@@ -186,6 +187,19 @@ export function raster(id: string, seed: number): Raster {
   const out: Raster = { w: W, h: H, cls, hgt, pd, walk, tiles, fog };
   rasters.set(key, out);
   return out;
+}
+
+/** 农田围栏挡路的部分（和 game/world/terrain.ts 里画的围栏对齐） */
+export function fenceRects(t: MapTemplate): Rect[] {
+  const F = t.field;
+  if (!F) return [];
+  const w = F.x1 - F.x0;
+  return [
+    { x: F.x0 - 3, y: F.y0 - 5, w: w + 6, h: 6 },
+    { x: F.x0 - 3, y: F.y1 - 3, w: w + 6, h: 6 },
+    { x: F.x0 - 3, y: F.y0 - 5, w: 6, h: F.y1 - F.y0 + 8 },
+    { x: F.x1 - 3, y: F.y0 - 5, w: 6, h: F.y1 - F.y0 + 8 },
+  ];
 }
 
 function fill(a: Uint8Array, W: number, H: number, r: Rect, v: number): void {

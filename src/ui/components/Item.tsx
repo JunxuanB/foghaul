@@ -19,14 +19,15 @@ export function ItemIcon({ id }: { id: ItemId }) {
 }
 
 /** 一个物品格 */
-export function Slot({ id, n, sel, onClick, title }: { id?: ItemId; n?: number; sel?: boolean; onClick?: () => void; title?: string }) {
+export function Slot({ id, n, sel, onClick, title, hotkey }: { id?: ItemId; n?: number; sel?: boolean; onClick?: () => void; title?: string; hotkey?: string }) {
   const cls = 'u-slot' + (sel ? ' sel' : '') + (id ? '' : ' empty');
-  const body = id ? (
+  const body = (
     <>
-      <img src={iconURL(id)} alt={t('item.' + id)} />
-      {n != null && n > 1 && <em>{n}</em>}
+      {hotkey && <i className="hk">{hotkey}</i>}
+      {id && <img src={iconURL(id)} alt={t('item.' + id)} />}
+      {id && n != null && n > 1 && <em>{n}</em>}
     </>
-  ) : null;
+  );
   const tip = title ?? (id ? t('item.' + id) : undefined);
   return onClick ? (
     <button type="button" className={cls} onClick={onClick} title={tip} aria-label={tip}>

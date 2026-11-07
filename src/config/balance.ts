@@ -92,14 +92,20 @@ export const BALANCE = {
     /** 主岛仓库上限（每种物品） */
     stockCap: 99,
     /** 货舱加固：每次 +10，最多到 60 */
-    holdUpgrade: { woodCosts: [20, 35, 50], step: 10 },
+    holdUpgrade: { woodCosts: [20, 35, 50], step: 6 },
   },
 
   // ---------------- 背包与货舱 ----------------
+  // 2D 版按格子算：每格放一种东西，按种类有堆叠上限。飞机零件不占格子。
+  // 岛上仓库不按格子：每种物品各有上限（见 stockCap），满了生产会停。
   inventory: {
-    packCap: 16,
-    holdCap: 30,
+    /** 随身背包的格数 */
+    packCap: 12,
+    /** 木筏货舱的格数（加固后增加，见 home.holdUpgrade.step） */
+    holdCap: 24,
     seats: 3,
+    /** 每格的堆叠上限：能吃喝用的东西 / 其他原料 */
+    stack: { consumable: 10, material: 20 },
   },
 
   // ---------------- 行动耗时 ----------------
@@ -234,6 +240,8 @@ export const BALANCE = {
   ui: {
     /** 左下角最多显示几条日志 */
     hudLogLines: 3,
+    /** 快捷栏格数（背包前几格） */
+    hotbarSlots: 5,
     /** 初见介绍卡显示多久（毫秒） */
     introMs: 5000,
   },

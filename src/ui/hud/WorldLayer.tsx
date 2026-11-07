@@ -23,11 +23,13 @@ export function WorldLayer() {
       const a = s.anchors;
       if (promptRef.current) {
         promptRef.current.style.left = a.player.x * k + 'px';
-        promptRef.current.style.top = (a.player.y - 34) * k + 'px';
+        promptRef.current.style.top = (a.promptBelow ? a.player.y + 4 : a.player.y - 34) * k + 'px';
+        promptRef.current.style.transform = a.promptBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
       }
       if (introRef.current && a.intro) {
         introRef.current.style.left = a.intro.x * k + 'px';
-        introRef.current.style.top = (a.intro.y - 4) * k + 'px';
+        introRef.current.style.top = (a.intro.below ? a.intro.y : a.intro.y - 4) * k + 'px';
+        introRef.current.style.transform = a.intro.below ? (a.intro.side > 0 ? 'translate(0, 0)' : 'translate(-100%, 0)') : 'translate(-50%, -100%)';
       }
       const e = edgeRef.current;
       if (e) {

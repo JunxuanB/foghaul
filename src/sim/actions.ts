@@ -13,10 +13,10 @@ import {
   carried,
   deliverNeeds,
   giveToPlayer,
-  holdFree,
+  holdRoom,
   missingCost,
   needsDone,
-  packFree,
+  packRoom,
   pay,
   stockRoom,
   whereStock,
@@ -216,10 +216,14 @@ export function craftBlock(state: GameState, recipe: RecipeId): Msg | null {
   if (bulk && !src) return m('err.needOwnedIsland');
   if (!canPay(state, src, r.inputs as Stock)) return m('err.missing', { list: stockP(missingCost(state, src, r.inputs as Stock)) });
   if (bulk && src && Object.entries(r.outputs).some(([k, v]) => stockRoom(state, src, k as ItemId) < (v ?? 0))) return m('err.stockFull');
-  const carry = Object.entries(r.outputs).reduce((n, [k, v]) => n + (ITEMS[k as ItemId].portable ? v ?? 0 : 0), 0);
+  // 做好的东西放背包，满了放货舱，再满了放这座岛的仓库；用掉的原料会腾出地方（按件数粗算）
   const freed = Object.values(r.inputs).reduce((n, v) => n + (v ?? 0), 0);
-  const room = packFree(state) + holdFree(state) + freed + (src ? 99 : 0);
-  if (carry > room) return m('err.noRoom');
+  for (const [k, v] of Object.entries(r.outputs)) {
+    const id = k as ItemId;
+    if (!ITEMS[id].portable) continue;
+    const room = packRoom(state, id) + holdRoom(state, id) + (src ? stockRoom(state, src, id) : 0) + freed;
+    if ((v ?? 0) > room) return m('err.noRoom');
+  }
   return null;
 }
 
@@ -289,8 +293,8 @@ function transfer(state: GameState, item: ItemId, from: 'pack' | 'hold' | 'stock
   const dst = whereStock(state, to);
   if (!src || !dst) return fail('err.notDocked');
   let k = Math.min(n, stockGet(src, item));
-  if (to === 'pack' && !def.key) k = Math.min(k, packFree(state));
-  if (to === 'hold' && !def.key) k = Math.min(k, holdFree(state));
+  if (to === 'pack') k = Math.min(k, packRoom(state, item));
+  if (to === 'hold') k = Math.min(k, holdRoom(state, item));
   if (to === 'stock' && isl) k = Math.min(k, stockRoom(state, isl, item));
   if (k <= 0) return fail(stockGet(src, item) <= 0 ? 'err.noneLeft' : 'err.noRoom');
   stockAdd(src, item, -k);

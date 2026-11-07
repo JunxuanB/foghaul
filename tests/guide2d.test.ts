@@ -56,6 +56,31 @@ describe('2D rules', () => {
     expect(keys['guide.night']).toBeTruthy();
   });
 
+  it('pack and hold count slots with stack limits; parts take no slot', async () => {
+    const { packRoom, roomIn, slotView, slotsUsed } = await import('../src/sim/inventory');
+    const { BALANCE } = await import('../src/config/balance');
+    const s = createGame(4);
+    const I = BALANCE.inventory;
+    expect(packRoom(s, 'wood')).toBe(I.packCap * I.stack.material);
+    s.player.pack = { wood: 25, fish: 3, partRotor: 1 };
+    // 25 木头占 2 格，3 条鱼占 1 格，零件不占
+    expect(slotsUsed(s.player.pack)).toBe(3);
+    // 按物品顺序排（鱼在木头前），超过堆叠上限的拆成几格
+    expect(slotView(s.player.pack).slots).toEqual([
+      { id: 'fish', n: 3 },
+      { id: 'wood', n: I.stack.material },
+      { id: 'wood', n: 25 - I.stack.material },
+    ]);
+    expect(slotView(s.player.pack).keys).toEqual([{ id: 'partRotor', n: 1 }]);
+    // 已有的木头那一格还能再放 15 根，加上空格
+    expect(roomIn(s.player.pack, I.packCap, 'wood')).toBe(2 * I.stack.material - 25 + (I.packCap - 3) * I.stack.material);
+    // 背包满了，采集的东西会放进主岛仓库
+    s.player.pack = { fish: I.packCap * I.stack.consumable };
+    expect(packRoom(s, 'wood')).toBe(0);
+    must(s, { t: 'gather', what: 'branch' });
+    expect(s.islands.find((x) => x.id === 'home')!.stock.wood).toBe(1);
+  });
+
   it('saves with the 2D format and refuses other versions', () => {
     const s = createGame(11);
     s.walk.x = 123;

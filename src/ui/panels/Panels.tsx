@@ -4,8 +4,8 @@ import { ITEMS, ITEM_ORDER, PART_IDS, type ItemId } from '../../config/items';
 import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
 import { LANGS, t, tm } from '../../i18n';
 import { canUseStock, craftBlock, here } from '../../sim/actions';
-import { costAvailable } from '../../sim/inventory';
-import { stockLoad } from '../../sim/util';
+import { costAvailable, slotsUsed, slotView, stockCap } from '../../sim/inventory';
+import type { Stock } from '../../sim/types';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
 import { ItemIcon, ItemName, Slot } from '../components/Item';
 import { Rich } from '../components/Text';
@@ -14,16 +14,28 @@ import { Panel } from './Panel';
 
 const list = (s: Partial<Record<ItemId, number>>) => ITEM_ORDER.filter((id) => (s[id] ?? 0) > 0);
 
-function Grid({ stock, cap, onPick, title }: { stock: Partial<Record<ItemId, number>>; cap: number; onPick?: (id: ItemId) => void; title?: (id: ItemId) => string }) {
-  const ids = list(stock);
-  const slots = Math.max(ids.length, Math.min(cap, 16));
+/** 按格子画一个背包 / 货舱：每格一种东西，超过堆叠上限的拆成几格；零件另列一行 */
+function SlotGrid({ stock, slots, onPick, title }: { stock: Stock; slots: number; onPick?: (id: ItemId) => void; title?: (id: ItemId) => string }) {
+  const v = slotView(stock);
   return (
-    <div className="grid-slots">
-      {Array.from({ length: slots }, (_, i) => {
-        const id = ids[i];
-        return <Slot key={i} id={id} n={id ? stock[id] : undefined} onClick={id && onPick ? () => onPick(id) : undefined} title={id && title ? title(id) : undefined} />;
-      })}
-    </div>
+    <>
+      <div className="grid-slots">
+        {Array.from({ length: Math.max(slots, v.slots.length) }, (_, i) => {
+          const c = v.slots[i];
+          return <Slot key={i} id={c?.id} n={c?.n} onClick={c && onPick ? () => onPick(c.id) : undefined} title={c && title ? title(c.id) : undefined} />;
+        })}
+      </div>
+      {v.keys.length > 0 && (
+        <div className="rows">
+          <span className="u-label">{t('ui.keyItems')}</span>
+          <div className="seg">
+            {v.keys.map((k) => (
+              <ItemName key={k.id} id={k.id} n={k.n} />
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -32,14 +44,15 @@ export function InventoryPanel() {
   const g = useGame();
   const store = useStore();
   const p = g.player;
+  const cap = BALANCE.inventory.packCap;
   const use = (id: ItemId) => {
     if (ITEMS[id].eat) store.dispatch({ t: 'consume', from: 'pack', item: id });
   };
   return (
-    <Panel title={t('ui.pack')} sub={t('ui.packLoad', { n: stockLoad(p.pack), cap: BALANCE.inventory.packCap })}>
-      <Grid stock={p.pack} cap={BALANCE.inventory.packCap} onPick={use} title={(id) => t('item.' + id) + (ITEMS[id].eat ? ' · ' + t('ui.clickToUse') : '')} />
-      {list(p.pack).length === 0 && <p className="u-dim">{t('ui.packEmpty')}</p>}
-      {list(p.pack).length > 0 && <p className="u-dim">{t('ui.packHint')}</p>}
+    <Panel title={t('ui.pack')} sub={t('ui.slotsUsed', { n: slotsUsed(p.pack), cap })}>
+      <SlotGrid stock={p.pack} slots={cap} onPick={use} title={(id) => t('item.' + id) + (ITEMS[id].eat ? ' · ' + t('ui.clickToUse') : '')} />
+      <p className="u-dim">{list(p.pack).length === 0 ? t('ui.packEmpty') : t('ui.packHint')}</p>
+      <p className="u-dim">{t('ui.stackRule', { a: BALANCE.inventory.stack.material, b: BALANCE.inventory.stack.consumable })}</p>
     </Panel>
   );
 }
@@ -100,7 +113,7 @@ export function CraftPanel() {
   );
 }
 
-/** 仓库（储物箱）：左边背包、右边仓库，点一下放进 / 取出 */
+/** 仓库（储物箱）：左边背包（格子），右边岛上仓库（每种物品各有上限）。点一下放进 / 取出 */
 export function ChestPanel() {
   const g = useGame();
   const store = useStore();
@@ -110,17 +123,43 @@ export function ChestPanel() {
     const src = from === 'pack' ? g.player.pack : isl.stock;
     store.dispatch({ t: 'transfer', item: id, from, to: from === 'pack' ? 'stock' : 'pack', n: src[id] ?? 0 });
   };
+  const ids = list(isl.stock);
   return (
     <Panel title={t('thing.chest')} sub={t('ui.chestHint')} wide>
       <div className="cols">
         <div>
-          <h3>{t('ui.pack')}</h3>
-          <Grid stock={g.player.pack} cap={BALANCE.inventory.packCap} onPick={(id) => move(id, 'pack')} title={(id) => t('ui.putIn', { item: { k: 'item.' + id } })} />
+          <h3>
+            {t('ui.pack')} <span className="u-dim">{t('ui.slotsUsed', { n: slotsUsed(g.player.pack), cap: BALANCE.inventory.packCap })}</span>
+          </h3>
+          <SlotGrid stock={g.player.pack} slots={BALANCE.inventory.packCap} onPick={(id) => move(id, 'pack')} title={(id) => t('ui.putIn', { item: { k: 'item.' + id } })} />
         </div>
         <div>
           <h3>{t('ui.stock')}</h3>
-          <Grid stock={isl.stock} cap={16} onPick={(id) => ITEMS[id].portable && move(id, 'stock')} title={(id) => (ITEMS[id].portable ? t('ui.takeOut', { item: { k: 'item.' + id } }) : t('ui.notPortable'))} />
-          {list(isl.stock).length === 0 && <p className="u-dim">{t('ui.stockEmpty')}</p>}
+          {ids.length === 0 && <p className="u-dim">{t('ui.stockEmpty')}</p>}
+          <div className="stock-list">
+            {ids.map((id) => {
+              const n = isl.stock[id] ?? 0;
+              const cap = stockCap(g, isl, id);
+              const portable = ITEMS[id].portable;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className="stock-row"
+                  disabled={!portable}
+                  onClick={() => move(id, 'stock')}
+                  title={portable ? t('ui.takeOut', { item: { k: 'item.' + id } }) : t('ui.notPortable')}
+                >
+                  <ItemName id={id} />
+                  <i style={{ ['--v' as string]: Math.min(1, n / Math.max(1, cap)) }} />
+                  <span className={n >= cap ? 'full' : ''}>
+                    {n}/{cap}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="u-dim">{t('ui.stockRule')}</p>
         </div>
       </div>
     </Panel>

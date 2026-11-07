@@ -9,7 +9,7 @@ import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
 import { ANIM, LIGHTS, VIEW } from '../../config/visual';
 import { minuteOfDay } from '../../sim/clock';
 import { currentGuide } from '../../sim/guide';
-import { carried } from '../../sim/inventory';
+import { carried, slotView } from '../../sim/inventory';
 import { interactInfo } from '../../sim/interact';
 import type { Command, Facing, GameState } from '../../sim/types';
 import { island } from '../../sim/util';
@@ -21,6 +21,7 @@ import { paintFog } from '../render/fog';
 import { paintMask, type Beam, type Spot } from '../render/mask';
 import { PalettePipeline } from '../render/PalettePipeline';
 import { paintTerrain, waterFx } from '../world/terrain';
+import { Particles } from '../world/particles';
 
 type Img = Phaser.GameObjects.Image;
 
@@ -69,10 +70,14 @@ export class IslandScene extends Phaser.Scene {
   private moving = false;
   private pending: { cmd: Command; obj: WorldObj } | null = null;
   private off: (() => void) | null = null;
-  private lastPos = { x: 0, y: 0 };
   /** 点阵过渡：到 1 时执行 mid，再淡回 0 */
   private fade: { t: number; mid: (() => void) | null } | null = null;
   private deaths = 0;
+  /** 采集动画：粒子、计时、被摇动的物体 */
+  private parts = new Particles();
+  private rseq = 1;
+  private actT = 0;
+  private shaking: Img | null = null;
 
   constructor() {
     super('island');
@@ -115,7 +120,6 @@ export class IslandScene extends Phaser.Scene {
     this.hl = this.add.image(0, 0, 'ui_arrow').setOrigin(0.5, 1).setVisible(false);
     this.arrow = this.add.image(0, 0, 'ui_arrow').setOrigin(0.5, 1).setDepth(55000).setVisible(false);
     this.player = this.add.image(s.walk.x, s.walk.y + 1, 'ch_player_down_0').setOrigin(0.5, 1);
-    this.lastPos = { x: s.walk.x, y: s.walk.y };
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, this.L.pw, this.L.ph);
@@ -158,8 +162,7 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private useHotbar(): void {
-    const items = ITEM_ORDER.filter((id) => (this.state.player.pack[id] ?? 0) > 0).slice(0, 5);
-    const id = items[this.ctx.view.s.hotbar];
+    const id = slotView(this.state.player.pack).slots[this.ctx.view.s.hotbar]?.id;
     if (!id || !ITEMS[id].eat) return;
     this.ctx.store.dispatch({ t: 'consume', from: 'pack', item: id });
   }
@@ -177,6 +180,8 @@ export class IslandScene extends Phaser.Scene {
       const what = g.t === 'gather' ? g.what : 'branch';
       const now = performance.now();
       this.pending = { cmd: g, obj: o };
+      this.actT = 0;
+      this.faceTo(o);
       v.set({ action: { label: info.label, start: now, end: now + (ANIM.actionSeconds[what] ?? 1) * 1000 } });
       return;
     }
@@ -217,6 +222,7 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private cancelAction(): void {
+    this.stopShake();
     this.pending = null;
     this.ctx.view.set({ action: null });
   }
@@ -225,6 +231,8 @@ export class IslandScene extends Phaser.Scene {
     const p = this.pending;
     if (!p) return;
     this.pending = null;
+    this.stopShake();
+    this.actionBurst(p.obj, true);
     const before = totals(this.state);
     const r = this.ctx.store.dispatch(p.cmd);
     this.ctx.view.set({ action: null });
@@ -235,6 +243,68 @@ export class IslandScene extends Phaser.Scene {
       const d = (after[id] ?? 0) - (before[id] ?? 0);
       if (d > 0) this.ctx.view.pop(id, '+' + d, w.x, w.y - 30);
     }
+  }
+
+  // ---------------------------------------------------------------- 采集动画
+
+  private rnd = (): number => hash(this.rseq++, 7, 91);
+
+  /** 动作开始时转身面对物体 */
+  private faceTo(o: WorldObj): void {
+    const w = this.state.walk;
+    const r = o.hit ?? { x: o.x, y: o.y, w: 0, h: 0 };
+    const dx = r.x + r.w / 2 - w.x;
+    const dy = r.y + r.h / 2 - w.y;
+    w.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+  }
+
+  private stopShake(): void {
+    if (!this.shaking) return;
+    const o = this.L.objects.find((x) => this.objImgs.get(x.id) === this.shaking);
+    if (o) this.shaking.setX(o.x);
+    this.shaking = null;
+  }
+
+  /** 动作进行中：树和草药丛被摇动、掉叶子；捞鱼时浮漂一沉一浮 */
+  private animateAction(dt: number): void {
+    const p = this.pending;
+    if (!p) return;
+    const o = p.obj;
+    const img = this.objImgs.get(o.id);
+    const prev = this.actT;
+    this.actT += dt;
+    const beat = ANIM.gatherBeat;
+    const hit = Math.floor(this.actT / beat) !== Math.floor(prev / beat);
+    if ((o.kind === 'tree' || o.kind === 'herb') && img) {
+      this.shaking = img;
+      // 每一下摇两帧
+      const ph = (this.actT % beat) / beat;
+      img.setX(o.x + (ph < 0.15 ? 1 : ph < 0.3 ? -1 : 0));
+    }
+    if (hit) this.actionBurst(o, false);
+  }
+
+  /** 一下动作的粒子；end 为动作完成 */
+  private actionBurst(o: WorldObj, end: boolean): void {
+    const img = this.objImgs.get(o.id);
+    if (o.kind === 'tree' && img) {
+      // 树冠掉叶子，树干飞木屑
+      const top = img.y - img.height;
+      for (let i = 0; i < (end ? 4 : 2); i++)
+        this.parts.add({ x: o.x + (this.rnd() - 0.5) * img.width * 0.7, y: top + img.height * (0.15 + this.rnd() * 0.4), vx: (this.rnd() - 0.5) * 10, vy: 4, g: 10, floor: o.y + this.rnd() * 6, life: 1.6, role: this.rnd() < 0.5 ? 'l2' : 'l3' });
+      this.parts.burst(end ? 5 : 2, o.x, o.y - 6, ['w2', 'w3'], { speed: 26, up: 30, g: 140, floor: o.y + 3, life: 0.8 }, this.rnd);
+    } else if (o.kind === 'herb' && img) {
+      this.parts.burst(end ? 5 : 2, o.x, o.y - 8, ['l2', 'l3', 'fw'], { speed: 16, up: 28, g: 90, floor: o.y + 2, life: 0.9 }, this.rnd);
+    } else if (o.kind === 'shoal') {
+      const [bx, by] = this.bobber(o);
+      if (end) this.parts.burst(8, bx, by, ['foam', 'foam', 'e3'], { speed: 22, up: 34, g: 150, floor: by + 1, life: 0.6 }, this.rnd);
+      else this.parts.burst(2, bx, by, ['foam'], { speed: 8, up: 12, g: 90, floor: by + 1, life: 0.4 }, this.rnd);
+    }
+  }
+
+  /** 浅滩钓点里浮漂的位置 */
+  private bobber(o: WorldObj): [number, number] {
+    return [o.x + 3, o.y + 6];
   }
 
   // ---------------------------------------------------------------- 每帧
@@ -255,6 +325,8 @@ export class IslandScene extends Phaser.Scene {
     }
 
     if (this.pending && performance.now() >= (view.s.action?.end ?? 0)) this.finishAction();
+    this.animateAction(dt);
+    this.parts.step(dt);
     this.walk(dt);
     this.placeCamera();
     this.updatePlayerSprite(dt);
@@ -277,27 +349,46 @@ export class IslandScene extends Phaser.Scene {
     view.s.anchors.player = { x: s.walk.x - cam.scrollX, y: s.walk.y - cam.scrollY };
   }
 
+  /** 走路剩下不到一步的距离（像素） */
+  private stepAcc = 0;
+
+  /**
+   * 按整像素走：斜着走时两个方向同时走 1 像素（花 √2 的距离），不会一格横一格竖地抖。
+   * 斜着走用左右的行走动画（和星露谷一样），不然看起来像在横着滑。
+   */
   private walk(dt: number): void {
     const s = this.state;
     const w = s.walk;
+    w.x = Math.round(w.x);
+    w.y = Math.round(w.y);
     const blocked = !!this.ctx.view.s.panel || !!this.pending || !!this.fade || !this.ctx.store.running;
-    let [dx, dy] = blocked ? [0, 0] : moveDir();
-    this.moving = dx !== 0 || dy !== 0;
-    if (!this.moving) return;
-    const len = Math.hypot(dx, dy);
-    dx /= len;
-    dy /= len;
-    if (Math.abs(dx) > Math.abs(dy) + 0.01) w.facing = dx > 0 ? 'right' : 'left';
-    else if (Math.abs(dy) > 0.01) w.facing = dy > 0 ? 'down' : 'up';
-    const sp = BALANCE.interact.walkSpeed * dt;
-    const nx = w.x + dx * sp;
-    if (canStand(this.R, nx, w.y)) w.x = nx;
-    const ny = w.y + dy * sp;
-    if (canStand(this.R, w.x, ny)) w.y = ny;
-    const moved = Math.hypot(w.x - this.lastPos.x, w.y - this.lastPos.y);
+    const [mx, my] = blocked ? [0, 0] : moveDir();
+    const sx = Math.sign(mx);
+    const sy = Math.sign(my);
+    this.moving = sx !== 0 || sy !== 0;
+    if (!this.moving) {
+      this.stepAcc = 0;
+      return;
+    }
+    if (sx !== 0) w.facing = sx > 0 ? 'right' : 'left';
+    else w.facing = sy > 0 ? 'down' : 'up';
+    this.stepAcc += BALANCE.interact.walkSpeed * dt;
+    let moved = 0;
+    while (this.stepAcc >= 1) {
+      const okX = sx !== 0 && canStand(this.R, w.x + sx, w.y);
+      if (okX) w.x += sx;
+      const okY = sy !== 0 && canStand(this.R, w.x, w.y + sy);
+      if (okY) w.y += sy;
+      if (!okX && !okY) {
+        this.stepAcc = 0;
+        break;
+      }
+      const cost = okX && okY ? Math.SQRT2 : 1;
+      this.stepAcc -= cost;
+      moved += cost;
+    }
     w.moved += moved;
-    this.lastPos = { x: w.x, y: w.y };
-    if (moved === 0) this.moving = false;
+    if (moved === 0 && this.stepAcc === 0) this.moving = false;
   }
 
   private placeCamera(): void {
@@ -315,8 +406,9 @@ export class IslandScene extends Phaser.Scene {
       this.walkT += dt;
       f = Math.floor(this.walkT * ANIM.walkFps) % 4;
     } else if (this.pending) {
-      this.walkT += dt;
-      f = Math.floor(this.walkT * 2.5) % 2 ? 1 : 3;
+      // 采集：跟着节奏挥一下手（捞鱼时站着不动，只看浮漂）
+      const swing = (this.actT % ANIM.gatherBeat) / ANIM.gatherBeat < 0.3;
+      f = this.pending.obj.kind === 'shoal' ? 0 : swing ? 1 : 3;
     } else this.walkT = 0;
     this.player.setTexture(`ch_player_${DIR_OF[w.facing]}_${f}`);
     this.player.setFlipX(w.facing === 'left');
@@ -352,6 +444,8 @@ export class IslandScene extends Phaser.Scene {
       else best = null;
     }
     v.setIfChanged('focus', best ? { id: best.id, kind: best.kind } : null);
+    const ref = this.pending?.obj ?? best;
+    v.s.anchors.promptBelow = !!ref?.hit && ref.hit.y + ref.hit.h <= w.y - 2;
     v.setIfChanged('prompts', prompts);
     // 选中描边
     const img = best ? this.objImgs.get(best.id) : undefined;
@@ -371,7 +465,16 @@ export class IslandScene extends Phaser.Scene {
     if (v.s.intro) {
       const o = this.nearestOfKind(v.s.intro.kind);
       const img = o ? this.objImgs.get(o.id) : undefined;
-      if (o) v.s.anchors.intro = { x: o.x - cam.scrollX, y: (img ? img.y - img.height : o.y - 16) - cam.scrollY };
+      if (o) {
+        // 物体在人物下方时卡片放在物体旁边（不挡人物，也不挡物体周围），否则放在物体上方
+        const below = o.y > s.walk.y + 4;
+        const top = img ? img.y - img.height : o.y - 16;
+        const half = img ? img.width / 2 : 8;
+        const side = o.x - cam.scrollX < VIEW.w / 2 ? 1 : -1;
+        v.s.anchors.intro = below
+          ? { x: o.x + side * (half + 6) - cam.scrollX, y: top - cam.scrollY, below, side }
+          : { x: o.x - cam.scrollX, y: top - cam.scrollY, below, side };
+      }
       return;
     }
     if (v.s.panel || this.pending) return;
@@ -499,6 +602,29 @@ export class IslandScene extends Phaser.Scene {
         u.fillRect(x - (len >> 1), y, len, 1);
       }
     }
+    // 浅滩钓点：一圈圈水纹（平时也有，好找）；捞鱼时多一个浮漂
+    for (const o of this.L.objects) {
+      if (o.kind !== 'shoal') continue;
+      const fishing = this.pending?.obj.id === o.id;
+      const [bx, by] = this.bobber(o);
+      const period = fishing ? ANIM.gatherBeat : ANIM.rippleSeconds;
+      for (const off of [0, 0.5]) {
+        const ph = ((t + off * period) / period) % 1;
+        const r = 3 + ph * (fishing ? 9 : 16);
+        if (ph > 0.85 && Math.floor(t * 20) % 2) continue;
+        const pts = Math.round(r * 4);
+        for (let a = 0; a < pts; a++) {
+          if (a % 4 === 3) continue;
+          const ang = (a / pts) * Math.PI * 2;
+          px(u, P, 'foam', Math.round(bx + Math.cos(ang) * r - cx), Math.round(by + Math.sin(ang) * r * 0.45 - cy));
+        }
+      }
+      if (fishing) {
+        const dip = (this.actT % ANIM.gatherBeat) / ANIM.gatherBeat < 0.25 ? 1 : 0;
+        px(u, P, 'x2', bx - cx, by - 3 + dip - cy, 2, 2);
+        px(u, P, 'e3', bx - cx, by - 1 + dip - cy, 2, 1);
+      }
+    }
     if (this.raft && this.L.raftAt) {
       const [rx, ry] = this.L.raftAt;
       const bob = Math.round(Math.sin(t * 1.8) * 1.1);
@@ -572,6 +698,20 @@ export class IslandScene extends Phaser.Scene {
       c.drawImage(g1, Math.round(((t * 15) % 560) - 40), Math.round(70 + Math.sin(t * 1.1) * 6));
       c.drawImage(g1, Math.round(520 - ((t * 11 + 260) % 560)), Math.round(30 + Math.sin(t * 0.9 + 1) * 5));
     }
+    // 鱼线：从人物手里到浮漂，深色，画在最上层
+    const fo = this.pending?.obj;
+    if (fo && fo.kind === 'shoal') {
+      const [bx, by] = this.bobber(fo);
+      const w = this.state.walk;
+      const hx = w.x + (w.facing === 'left' ? -6 : w.facing === 'right' ? 6 : 5);
+      const hy = w.y - 13;
+      const n = Math.ceil(Math.hypot(bx - hx, by - 3 - hy));
+      for (let i = 0; i < n; i++) {
+        const k = i / n;
+        px(c, P, 'o', Math.round(hx + (bx - hx) * k - cx), Math.round(hy + (by - 3 - hy) * k + Math.sin(k * Math.PI) * 2 - cy));
+      }
+    }
+    this.parts.draw(c, P, cx, cy);
     this.over.refresh();
 
     // 雾

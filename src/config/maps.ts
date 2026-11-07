@@ -12,7 +12,7 @@ export interface MapTemplate {
   paths: [number, number][][];
   /** 小路半宽 */
   pathWidth: number;
-  /** 农田空地 */
+  /** 农田空地（四周有围栏，围栏挡路） */
   field?: { x0: number; y0: number; x1: number; y1: number };
   /** 码头：从岸上 (x, y) 向下伸进海里 */
   dock?: { x: number; y: number; w: number; len: number };
@@ -41,7 +41,8 @@ export const MAPS: Record<string, MapTemplate> = {
     pathWidth: 5.5,
     field: { x0: 486, y0: 280, x1: 562, y1: 336 },
     dock: { x: 580, y: 412, w: 18, len: 78 },
-    shoal: { x: 90, y: 410, out: 7 },
+    // 浅滩钓点放在出生点东南的南岸：开局就在画面里，周围没有树挡着
+    shoal: { x: 470, y: 520, out: 15 },
     spawn: [384, 424],
     objects: [
       // 树林（西边）
@@ -55,8 +56,7 @@ export const MAPS: Record<string, MapTemplate> = {
       ['herb', 520, 112], ['sign', 476, 340],
       // 装饰
       ['fire', 402, 284], ['woodpile', 470, 206], ['barrel', 610, 410], ['crate', 556, 404], ['net', 640, 380],
-      ['bush', 250, 300], ['bush', 640, 250], ['bush', 520, 410], ['bush', 90, 330], ['palm', 720, 330], ['palm', 470, 456],
-      ['palm', 130, 420], ['rock', 750, 260], ['boulder', 220, 430], ['rock', 680, 130], ['stump', 196, 196], ['rock', 360, 120],
+      ['bush', 250, 300], ['bush', 640, 250], ['bush', 520, 410], ['bush', 90, 330], ['palm', 720, 330], ['palm', 130, 420], ['rock', 750, 260], ['boulder', 220, 430], ['rock', 680, 130], ['stump', 196, 196], ['rock', 360, 120],
     ],
     fog: [1.12, 1.42],
   },
