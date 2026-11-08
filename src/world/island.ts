@@ -40,6 +40,9 @@ export interface Layout {
 }
 
 /** 地形类别 */
+/** 木筏停靠处的水深（高度低于 -RAFT_DEPTH 才算够深，不压在浪花上） */
+const RAFT_DEPTH = 10;
+
 export const T = { deep: 0, mid: 1, surf: 2, sand: 3, grass: 4, path: 5, field: 6 } as const;
 
 const seedOf = (t: MapTemplate, seed: number) => (t.island.seed * 131 + (Math.abs(seed | 0) % 9973)) | 0;
@@ -97,7 +100,11 @@ export function layout(id: string, seed: number): Layout {
     const d = t.dock;
     dock = { x: d.x - (d.w >> 1), y: d.y, w: d.w, h: d.len };
     objects.push({ id: 'dock#1', kind: 'dock', sprite: '', x: d.x, y: d.y + d.len, foot: null, hit: { ...dock } });
-    raftAt = [d.x + (d.w >> 1) + 22, d.y + d.len - 2];
+    // 木筏停在码头旁边、刚过浪花的水里（太靠外会在外圈的雾里看不见）
+    const rx = d.x + (d.w >> 1) + 22;
+    let ry = d.y;
+    while (ry < d.y + d.len - 2 && heightAt(t, seed, rx, ry - 14) > -RAFT_DEPTH) ry += 2;
+    raftAt = [rx, Math.min(d.y + d.len - 2, ry)];
   }
   const out: Layout = { template: t, pw: t.w * TILE, ph: t.h * TILE, objects, spawn: t.spawn, dock, raftAt };
   layouts.set(key, out);

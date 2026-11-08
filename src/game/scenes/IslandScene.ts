@@ -10,10 +10,14 @@ import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
 import { ANIM, LIGHTS, VIEW, WORK_ICON } from '../../config/visual';
 import { currentGuide } from '../../sim/guide';
 import { carried, slotView } from '../../sim/inventory';
-import { interactInfo, objectsOn, personOfObj } from '../../sim/interact';
+import { charOf, interactInfo, objectsOn, personOfObj } from '../../sim/interact';
 import type { Command, Facing, GameState } from '../../sim/types';
 import { island } from '../../sim/util';
 import { islandRate } from '../../sim/economy';
+import { hasKey } from '../../i18n';
+
+/** 初见介绍按什么分：精灵有自己的介绍（设施地基）就按精灵，否则按种类 */
+const introKind = (o: WorldObj): string => (o.sprite !== o.kind && hasKey('intro2d.' + o.sprite) ? o.sprite : o.kind);
 import type { Prompt } from '../../store/view';
 import { canStand, FEET, layout, raster, rectDist, type Layout, type Raster, type Rect, type WorldObj } from '../../world/island';
 import { moveDir, type Action } from '../input/keys';
@@ -50,6 +54,8 @@ export class IslandScene extends WorldScene {
   private isl = 'home';
   private player!: Img;
   private objImgs = new Map<string, Img>();
+  private aboardImgs: Img[] = [];
+  private aboardKey = '';
   /** 这一帧岛上的全部物体（固定的 + 今天的树和草药），以及会挡路的采集点底座 */
   private objs: WorldObj[] = [];
   private blockers: Rect[] = [];
@@ -85,6 +91,8 @@ export class IslandScene extends WorldScene {
     const s = this.state;
     this.isl = s.player.at ?? 'home';
     this.objImgs = new Map();
+    this.aboardImgs = [];
+    this.aboardKey = '';
     this.flames = new Map();
     this.glows = new Map();
     this.pending = null;
@@ -427,10 +435,11 @@ export class IslandScene extends WorldScene {
     if (v.s.panel || this.pending) return;
     const w = s.walk;
     for (const o of this.objs) {
-      if (!o.hit || o.kind === 'decor' || s.intros.includes(o.kind)) continue;
+      const ik = introKind(o);
+      if (!o.hit || o.kind === 'decor' || s.intros.includes(ik)) continue;
       if (rectDist(w.x, w.y - 1, o.hit) > BALANCE.interact.introRange) continue;
-      this.ctx.store.dispatch({ t: 'seeIntro', kind: o.kind });
-      v.set({ intro: { kind: o.kind, until: now + BALANCE.ui.introMs } });
+      this.ctx.store.dispatch({ t: 'seeIntro', kind: ik });
+      v.set({ intro: { kind: ik, until: now + BALANCE.ui.introMs } });
       return;
     }
   }
@@ -440,7 +449,7 @@ export class IslandScene extends WorldScene {
     let best: WorldObj | null = null;
     let bd = Infinity;
     for (const o of this.objs) {
-      if (o.kind !== kind) continue;
+      if (introKind(o) !== kind) continue;
       const d = Math.hypot(o.x - w.x, o.y - w.y);
       if (d < bd) {
         bd = d;
@@ -509,7 +518,23 @@ export class IslandScene extends WorldScene {
     // 停在码头边的木筏：在水里上下轻轻浮动，画在码头后面
     const raft = this.raftObj();
     const img = raft ? this.objImgs.get(raft.id) : undefined;
-    if (raft && img) img.setY(raft.y + 1 + Math.round(Math.sin(this.t * 1.8) * 1.1)).setDepth(raft.y - 40);
+    const bob = Math.round(Math.sin(this.t * 1.8) * 1.1);
+    if (raft && img) img.setY(raft.y + 1 + bob).setDepth(raft.y - 40);
+    // 随船的同伴站在木筏上（上船、下船时重建）
+    const aboard = this.state.player.aboard;
+    const key = aboard.join(',');
+    if (key !== this.aboardKey) {
+      for (const im of this.aboardImgs) im.destroy();
+      this.aboardImgs = aboard.slice(0, 3).map((id) => {
+        const p = this.state.people.find((x) => x.id === id);
+        return this.add.image(0, 0, `ch_${p ? charOf(p) : 'islander'}_down_0`).setOrigin(0.5, 1);
+      });
+      this.aboardKey = key;
+    }
+    this.aboardImgs.forEach((im, i) => {
+      im.setVisible(!!raft);
+      if (raft) im.setPosition(raft.x + [-9, 3, 13][i], raft.y - 7 + bob).setDepth(raft.y - 39);
+    });
   }
 
   private raftObj(): WorldObj | undefined {

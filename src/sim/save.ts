@@ -2,8 +2,11 @@ import { BALANCE } from '../config/balance';
 import type { GameState } from './types';
 import { initForage } from './forage';
 
-/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点。v3：木筏在海面上的位置、最近一次战斗。v4：每座岛都有树和草药。v5：设施暂存箱、昨日收成（仓库改成格子，旧档多出来的东西保留，只是放不进新的） */
-export const SAVE_VERSION = 5;
+/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点。v3：木筏在海面上的位置、最近一次战斗。v4：每座岛都有树和草药。v5：设施暂存箱、昨日收成（仓库改成格子，旧档多出来的东西保留，只是放不进新的）。v6：自动入库机、加入卡片、倒下卡片 */
+export const SAVE_VERSION = 6;
+
+/** v6 起有专门地图的岛（旧档里这些岛的树和草药按通用地图长的，要重新长） */
+const NEW_MAPS_V6 = ['stoneIsle', 'forestIsle', 'nativeA', 'fisherIsle'];
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -50,6 +53,16 @@ function migrate(s: GameState): GameState | null {
     s.today = {};
     s.report = null;
     s.version = 5;
+  }
+  // v5 → v6：设施的自动入库机（都没装）；刚加入的人、最近一次倒下（都没有）
+  if (s.version === 5) {
+    for (const isl of s.islands) isl.buildings.autoStore = false;
+    s.joined = [];
+    s.lastDeath = null;
+    // 这几座岛有了专门的地图：按新地图重新长树和草药
+    for (const id of NEW_MAPS_V6) delete s.forage[id];
+    initForage(s);
+    s.version = 6;
   }
   if (s.version === SAVE_VERSION) return s;
   return null;

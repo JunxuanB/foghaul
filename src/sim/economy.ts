@@ -115,7 +115,18 @@ export function produce(state: GameState, minutes: number): void {
         recordProduced(state, id, n, fac.kind === 'produce');
       }
       isl.prodAcc -= 1;
+      if (isl.buildings.autoStore) flushOutput(state, isl);
     }
+    if (isl.buildings.autoStore) flushOutput(state, isl);
+  }
+}
+
+/** 自动入库机：把暂存箱里的东西放进储物箱，放得下多少放多少 */
+export function flushOutput(state: GameState, isl: Island): void {
+  for (const [k, v] of Object.entries(isl.output)) {
+    const id = k as ItemId;
+    const n = addToStock(state, isl, id, v ?? 0);
+    if (n > 0) stockAdd(isl.output, id, -n);
   }
 }
 

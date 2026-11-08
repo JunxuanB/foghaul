@@ -17,7 +17,7 @@ export function ReportPopup() {
   const g = useGame();
   const store = useStore();
   const r = g.report;
-  const show = !!r && !r.seen && !g.recipePopup.length && !g.cutscene;
+  const show = !!r && !r.seen && !g.recipePopup.length && !g.joined.length && !(g.lastDeath && !g.lastDeath.seen) && !g.cutscene;
   useEffect(() => {
     store.hold('report', show);
     if (!show) return;

@@ -75,6 +75,7 @@ function stateObjects(state: GameState, islandId: string): WorldObj[] {
   }
   if (isl.owned && S.workbench) out.push(makeObj('workbench@' + islandId, 'workbench', ...S.workbench));
   if (isl.owned && S.facility && isl.facility) out.push(makeObj('facility@' + islandId, facilitySprite(isl.facility), ...S.facility, 'facility', 'facility'));
+  else if (isl.owned && S.facility && isl.kind === 'native') out.push(makeObj('facility@' + islandId, 'facilityBase', ...S.facility, 'facility', 'facilityBase'));
   if (isl.owned && S.chest) out.push(makeObj('chest@' + islandId, 'chest', ...S.chest));
   if (S.board) out.push(makeObj('board@' + islandId, 'board', ...S.board));
   return out;
@@ -153,12 +154,17 @@ export function objectFor(cmd: Command): ObjKind | null {
     case 'deliver':
       return 'npc';
     case 'build':
-      return cmd.what === 'lighthouse' ? 'lighthouse' : cmd.what === 'holdUpgrade' ? 'raft' : null;
+      return cmd.what === 'lighthouse' ? 'lighthouse' : cmd.what === 'holdUpgrade' ? 'raft' : cmd.what === 'autoStore' ? 'facility' : null;
     case 'upgradeIsland':
     case 'collect':
+    case 'train':
       return 'facility';
     case 'fillCup':
       return 'chest';
+    case 'pickUp':
+      return 'npc';
+    case 'dropOff':
+      return 'raft';
     default:
       return null;
   }
@@ -293,7 +299,7 @@ export function interactInfo(state: GameState, o: WorldObj): InteractInfo | null
       return { label: m('act.raft'), ok: true };
     case 'facility': {
       const isl = findIsland(state, state.player.at);
-      return { label: m('act.facility', { what: isl?.facility ? facilityName(isl.facility) : m('none') }), ok: true };
+      return { label: isl?.facility ? m('act.facility', { what: facilityName(isl.facility) }) : m('act.facilityBase'), ok: true };
     }
     default:
       return null;

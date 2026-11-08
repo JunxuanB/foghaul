@@ -485,6 +485,10 @@ export class SeaScene extends WorldScene {
     this.raft.setPosition(this.snap(this.rx, this.camX), this.snap(this.ry, this.camY) + bob);
     this.raft.setFlipX(this.face < 0);
     this.raft.setDepth(this.ry);
+    // 船上有几位同伴就换哪张图（mraft / mraft1–3）
+    const n = Math.min(3, this.state.player.aboard.length);
+    const key = n ? 'mraft' + n : 'mraft';
+    if (this.raft.texture.key !== key) this.raft.setTexture(key);
     const c = this.state.pendingCrate;
     if (c && c.x != null && c.y != null) {
       this.crate.setVisible(true).setPosition(Math.round(c.x), Math.round(c.y) + Math.round(Math.sin(this.t * 2.2))).setDepth(c.y);

@@ -174,4 +174,106 @@ export const MAPS: Record<string, MapTemplate> = {
     },
     fog: [1.12, 1.42],
   },
+  // ---------------- M3：A 段的专门地图（其他岛还用通用模板，见 world/templates.ts） ----------------
+  // 石头岛：光秃秃的大石头，工程师用罐头盒和木箱搭了个营地；几乎不长树
+  stoneIsle: {
+    id: 'stoneIsle',
+    w: 34,
+    h: 22,
+    island: { cx: 272, cy: 164, rx: 200, ry: 108, k: 160, noise: 22, noiseScale: 36, seed: 31 },
+    paths: [
+      [[270, 262], [270, 214], [228, 188]],
+      [[270, 214], [336, 186], [396, 146]],
+      [[270, 214], [200, 222]],
+    ],
+    pathWidth: 4.5,
+    dock: { x: 270, y: 256, w: 16, len: 74 },
+    spawn: [270, 264],
+    objects: [
+      // 工程师的营地：木箱、桶、一小堆火
+      ['crate', 196, 168], ['barrel', 210, 174], ['fire', 250, 160],
+      // 满岛的石头
+      ['boulder', 120, 150], ['boulder', 150, 210], ['rock', 170, 120], ['rock', 300, 112], ['boulder', 350, 120],
+      ['rock', 420, 190], ['boulder', 440, 160], ['rock', 380, 230], ['rock', 110, 190], ['bush', 330, 238],
+    ],
+    forage: { tree: [{ cx: 330, cy: 140, r: 36 }], herb: [{ cx: 160, cy: 170, r: 36 }] },
+    forageCounts: { tree: { start: 2, perDay: 1, max: 2 }, herb: { start: 2, perDay: 1, max: 2 } },
+    fog: [1.1, 1.38],
+    slots: { npc: [[232, 192], [254, 202], [214, 206]], lighthouse: [400, 134], workbench: [318, 226], chest: [352, 214], facility: [190, 236] },
+  },
+  // 森林岛：大岛，树很密，伐木工就是在这里爬上树的
+  forestIsle: {
+    id: 'forestIsle',
+    w: 40,
+    h: 26,
+    island: { cx: 320, cy: 192, rx: 250, ry: 138, k: 180, noise: 18, noiseScale: 60, seed: 41 },
+    paths: [
+      [[320, 322], [320, 262], [260, 234], [214, 222]],
+      [[320, 262], [400, 234], [480, 176]],
+      [[320, 262], [282, 290]],
+    ],
+    pathWidth: 4.5,
+    dock: { x: 320, y: 322, w: 16, len: 74 },
+    spawn: [320, 330],
+    objects: [
+      // 不能砍的老树围着岛边（能砍的树每天在 forage 区域里长）
+      ['tree_d', 110, 180], ['tree_d', 140, 250], ['tree_d', 170, 120], ['tree_d', 236, 104], ['stree_d', 300, 96],
+      ['tree_d', 382, 104], ['tree_d', 446, 118], ['tree_d', 528, 210], ['stree_d', 540, 250], ['tree_d', 470, 284],
+      ['tree_d', 150, 296], ['stree_d', 206, 312], ['tree_d', 420, 304], ['bush', 360, 290], ['woodpile', 246, 266],
+    ],
+    forage: {
+      tree: [{ cx: 210, cy: 168, r: 60 }, { cx: 430, cy: 190, r: 50 }, { cx: 320, cy: 160, r: 44 }],
+      herb: [{ cx: 190, cy: 270, r: 34 }],
+    },
+    forageCounts: { tree: { start: 9, perDay: 4, max: 10 }, herb: { start: 1, perDay: 1, max: 1 } },
+    fog: [1.1, 1.38],
+    slots: { npc: [[222, 228], [250, 242], [196, 246]], lighthouse: [486, 162], workbench: [384, 258], chest: [418, 262], facility: [268, 304] },
+  },
+  // 原住民岛：原住民的营地，篝火、柴堆、几只桶
+  nativeA: {
+    id: 'nativeA',
+    w: 36,
+    h: 24,
+    island: { cx: 288, cy: 176, rx: 220, ry: 122, k: 170, noise: 16, noiseScale: 48, seed: 53 },
+    paths: [
+      [[288, 290], [288, 236], [236, 210]],
+      [[288, 236], [362, 216], [432, 164]],
+      [[288, 236], [214, 258]],
+    ],
+    pathWidth: 4.5,
+    dock: { x: 288, y: 290, w: 16, len: 74 },
+    spawn: [288, 298],
+    objects: [
+      ['fire', 300, 196], ['woodpile', 336, 186], ['barrel', 252, 184], ['barrel', 264, 188], ['crate', 360, 252],
+      ['palm', 130, 170], ['palm', 470, 220], ['palm', 160, 250], ['bush', 410, 260], ['rock', 220, 120], ['bush', 400, 120],
+    ],
+    forage: { tree: [{ cx: 160, cy: 200, r: 50 }, { cx: 420, cy: 230, r: 40 }], herb: [{ cx: 330, cy: 124, r: 44 }] },
+    forageCounts: { tree: { start: 4, perDay: 2, max: 5 }, herb: { start: 2, perDay: 1, max: 3 } },
+    fog: [1.1, 1.38],
+    slots: { npc: [[244, 214], [272, 222], [226, 232]], lighthouse: [436, 152], workbench: [346, 262], chest: [384, 248], facility: [196, 270] },
+  },
+  // 渔民岛：长长的沙滩，晾着渔网；西南岸外有浅滩钓点
+  fisherIsle: {
+    id: 'fisherIsle',
+    w: 38,
+    h: 22,
+    island: { cx: 304, cy: 152, rx: 236, ry: 102, k: 160, noise: 14, noiseScale: 60, seed: 67 },
+    paths: [
+      [[300, 246], [300, 206], [244, 184]],
+      [[300, 206], [380, 190], [456, 128]],
+      [[300, 206], [212, 214]],
+    ],
+    pathWidth: 4.5,
+    dock: { x: 300, y: 246, w: 16, len: 72 },
+    spawn: [300, 254],
+    shoal: { x: 120, y: 240, out: 16 },
+    objects: [
+      ['net', 196, 168], ['net', 420, 222], ['barrel', 150, 200], ['crate', 164, 206], ['barrel', 470, 190],
+      ['palm', 120, 150], ['palm', 500, 160], ['rock', 530, 140], ['rock', 260, 110], ['bush', 360, 110],
+    ],
+    forage: { tree: [{ cx: 380, cy: 130, r: 40 }], herb: [{ cx: 230, cy: 120, r: 34 }] },
+    forageCounts: { tree: { start: 2, perDay: 1, max: 2 }, herb: { start: 1, perDay: 1, max: 1 } },
+    fog: [1.1, 1.38],
+    slots: { npc: [[250, 194], [276, 214], [230, 206]], lighthouse: [460, 116], workbench: [344, 230], chest: [376, 226], facility: [200, 232] },
+  },
 };

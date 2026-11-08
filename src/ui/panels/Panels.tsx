@@ -9,7 +9,10 @@ import { LANGS, t, tm } from '../../i18n';
 import { canUseStock, craftBlock, here } from '../../sim/actions';
 import { dryStock, slotsUsed, stockSlots } from '../../sim/inventory';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
-import { Card, Cell, CostGrid, Icon, Key, Picture, reasonText, Yield } from '../components/Kit';
+import { Card, Cell, Chip, CostGrid, Icon, Key, label, Picture, Portrait, reasonText, Yield } from '../components/Kit';
+import { charOf } from '../../sim/interact';
+import { canDo, isHungry, jobMsg, personLabel } from '../../sim/people';
+import type { Job, Person } from '../../sim/types';
 import { Rich } from '../components/Text';
 import { useUi } from '../ui';
 import { FacilityPanel, RaftPanel } from './IslandPanels';
@@ -236,6 +239,41 @@ export function JournalPanel() {
   );
 }
 
+/** 人物（P）：网络里所有的人，一人一张卡：头像、名字、在哪、在做什么、有没有断供 */
+export function PeoplePanel() {
+  const g = useGame();
+  const ppl = g.people.filter((p) => p.active);
+  const where = (p: Person) => (p.loc.kind === 'raft' ? t('ui.onRaft') : p.loc.kind === 'island' ? t('island.' + p.loc.id) : t('job.crew'));
+  return (
+    <Panel title={t('ui.people')} icon="ui_person" status={<span className="u-dim">{ppl.length}</span>}>
+      <div className="v-people">
+        {ppl.map((p) => {
+          const isl = p.loc.kind === 'island' ? g.islands.find((i) => i.id === (p.loc as { id: string }).id) : undefined;
+          // 原住民看学会的工作；同伴在自己能干活的岛上看那座岛的设施，否则写身份
+          const doing = p.type === 'native' ? label(jobMsg(p.job)) : isl?.facility && canDo(p, isl.facility) ? label(jobMsg(isl.facility as Job)) : t('role.' + p.role);
+          return (
+            <div key={p.id} className="k-card v-person">
+              <Portrait char={charOf(p)} name={label(personLabel(p))} />
+              <div>
+                <b>{label(personLabel(p))}</b>
+                <span className="u-dim">{where(p)}</span>
+                <span className="v-person-tags">
+                  {p.learning ? <Chip icon="ui_clock">{t('ui.learningTag')}</Chip> : <span className="u-dim">{doing}</span>}
+                  {isHungry(g, p) && (
+                    <Chip icon="ui_bowlEmpty" tone="warn">
+                      {t('ui.hungryTag')}
+                    </Chip>
+                  )}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
 const KEYS: [string, string][] = [
   ['WASD', 'ui.keyMove'],
   ['E', 'ui.keyUse'],
@@ -243,6 +281,7 @@ const KEYS: [string, string][] = [
   ['1–5', 'ui.keyHotbar'],
   ['Q', 'ui.keyEat'],
   ['J', 'ui.keyJournal'],
+  ['P', 'ui.keyPeople'],
   ['M', 'ui.keyMap'],
   ['H', 'ui.keyHelp'],
   ['Esc', 'ui.keyMenu'],
@@ -362,6 +401,8 @@ export function PanelHost() {
       return <HelpPanel />;
     case 'menu':
       return <MenuPanel />;
+    case 'people':
+      return <PeoplePanel />;
     default:
       return null;
   }

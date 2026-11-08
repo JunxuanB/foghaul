@@ -134,6 +134,7 @@ export function die(state: GameState): void {
   p.water = Math.max(p.water, S.death.minWater);
   p.food = Math.max(p.food, S.death.minFood);
   state.pendingCrate = null;
+  state.lastDeath = { lost: { ...lost }, bed: bed.id, seen: false };
   say(state, Object.keys(lost).length ? 'log.diedLost' : 'log.died', { lost: stockP(lost), bed: islandM(bed.id) }, 'bad');
 }
 

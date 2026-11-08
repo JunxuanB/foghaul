@@ -21,8 +21,12 @@ export interface Buildings {
   lighthouse: boolean;
   bed: boolean;
   depot: boolean;
+  /** 设施的自动入库机：暂存箱里的东西自动放进储物箱（放得下多少放多少） */
+  autoStore: boolean;
   helipad: boolean;
 }
+
+export type BuildWhat = keyof Buildings | 'holdUpgrade';
 
 export type MealState = 'full' | 'partial' | 'none';
 
@@ -249,6 +253,10 @@ export interface GameState {
   today: Record<string, DayLog>;
   /** 昨天的收成：早上 06:00 由 today 生成，玩家看过后 seen = true */
   report: HarvestReport | null;
+  /** 刚获救 / 刚招募的人（人的 id），界面逐个弹出“加入了”卡片 */
+  joined: string[];
+  /** 最近一次倒下：丢了什么、在哪张床醒来（界面弹卡片，看过 seen = true） */
+  lastDeath: { lost: Stock; bed: string; seen: boolean } | null;
   villages: Record<VillageId, VillageState>;
   flags: {
     farm: (number | null)[];
@@ -295,7 +303,7 @@ export type Command =
   | { t: 'consume'; from: Where; item: ItemId }
   | { t: 'transfer'; item: ItemId; from: Where; to: Where; n: number }
   | { t: 'deliver' }
-  | { t: 'build'; what: keyof Buildings | 'holdUpgrade' }
+  | { t: 'build'; what: BuildWhat }
   | { t: 'sleep' }
   | { t: 'wake' }
   | { t: 'pickUp'; personId: string }
@@ -331,6 +339,8 @@ export type Command =
   /** 在储物箱旁用水缸里的淡水装一杯（要会“装杯”、有空杯子） */
   | { t: 'fillCup' }
   | { t: 'ackReport' }
+  | { t: 'ackJoined' }
+  | { t: 'ackDeath' }
   | { t: 'ackGuide'; id: 'vitals' };
 
 export interface Result {

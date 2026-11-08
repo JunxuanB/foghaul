@@ -154,6 +154,8 @@ export const BALANCE = {
     bed: { cost: { wood: 15 }, minutes: 60 },
     depot: { cost: { wood: 10, cup: 4 }, minutes: 60 },
     helipad: { cost: { wood: 25, salt: 4 }, minutes: 120 },
+    /** 设施的自动入库机（在设施旁装）：暂存箱的产物自动放进储物箱。比较贵 */
+    autoStore: { cost: { wood: 40, cup: 6, bottledWater: 6 }, minutes: 120 },
   },
 
   // ---------------- 岛屿经济 ----------------

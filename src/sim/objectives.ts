@@ -4,7 +4,7 @@ import { RECIPES } from '../config/recipes';
 
 const RAFT_WOOD = RECIPES.raft.inputs.wood ?? 0;
 import type { Role } from '../config/recipes';
-import { ISLANDS } from '../config/world';
+import { ISLANDS, OBJECTIVE_ISLAND } from '../config/world';
 import { partsCollected } from './endgame';
 import { carried, needMsg } from './inventory';
 import { needsLighthouse } from './reveal';
@@ -19,6 +19,8 @@ export interface Objective {
   title: Msg;
   detail: Msg;
   done: boolean;
+  /** 这一步要去的岛（有救援 / 招募需求时，HUD 画成需求格） */
+  isl?: string;
 }
 
 function rescued(state: GameState, role: Role): boolean {
@@ -107,7 +109,7 @@ export function objectives(state: GameState): Objective[] {
         : m('obj.endless.wait'),
       false,
     ),
-  ];
+  ].map((x) => (OBJECTIVE_ISLAND[x.id] ? { ...x, isl: OBJECTIVE_ISLAND[x.id] } : x));
 }
 
 function routeDetail(state: GameState): Msg {

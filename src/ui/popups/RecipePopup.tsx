@@ -10,7 +10,8 @@ import type { ItemId } from '../../config/items';
 export function RecipePopup() {
   const g = useGame();
   const store = useStore();
-  const r = g.recipePopup[0];
+  // 有人刚加入时先看加入卡片，再看新配方
+  const r = g.joined.length ? undefined : g.recipePopup[0];
   useEffect(() => {
     store.hold('recipePopup', !!r);
   }, [r, store]);

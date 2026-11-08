@@ -539,6 +539,47 @@ export function spLighthouseBase(): G {
   return g.outline();
 }
 
+/** 设施地基：四根木桩围一圈绳子，中间平整的空地，旁边一块小木牌（还没定下做什么工作） */
+export function spFacilityBase(): G {
+  const g = new G(34, 22);
+  g.ell(17, 19, 15, 2.4, 'z');
+  g.ellS(17, 15, 14, 4.2, 'sa', { tex: 2.4, amp: 0.5, seed: 17 });
+  for (const [x, y] of [[4, 9], [28, 9], [6, 14], [26, 14]]) {
+    g.cyl(x, y, 2, 6, 'w', [1, 0]);
+    g.set(x, y, 'w3');
+  }
+  g.line(5, 10, 28, 10, 'q0');
+  g.line(5, 10, 7, 15, 'q0');
+  g.line(29, 10, 27, 15, 'q0');
+  // 木牌
+  g.cyl(16, 4, 2, 9, 'w', [1, 0]);
+  g.rect(12, 1, 10, 5, 'w2');
+  g.rect(12, 1, 10, 1, 'w3');
+  g.rect(12, 5, 10, 1, 'w0');
+  g.rect(14, 3, 6, 1, 'x1');
+  return g.outline();
+}
+
+/** 自动入库机：一段木滑槽，上面一个箱子，底下一排滚轮（面板里的图） */
+export function spAutoStore(): G {
+  const g = new G(34, 26);
+  g.ell(17, 23, 15, 2.4, 'z');
+  // 滑槽（斜的木板）
+  for (let i = 0; i < 22; i++) g.rect(5 + i, 8 + Math.floor(i / 2), 3, 2, i % 2 ? 'w2' : 'w1');
+  g.line(5, 7, 27, 18, 'w3');
+  // 支架
+  g.cyl(7, 10, 2, 12, 'w', [1, 0]);
+  g.cyl(25, 19, 2, 4, 'w', [1, 0]);
+  // 箱子
+  g.rect(8, 2, 9, 7, 'w2');
+  g.rect(8, 2, 9, 1, 'w3');
+  g.rect(8, 8, 9, 1, 'w0');
+  g.rect(12, 4, 2, 2, 'q2');
+  // 滚轮
+  for (const x of [10, 15, 20]) g.ellS(x, 20, 1.6, 1.6, 'm', { lo: 1, hi: 2 });
+  return g.outline();
+}
+
 /** 村落的请求板：两根柱子、一块板，钉着几张纸 */
 export function spBoard(): G {
   const g = new G(22, 22);
@@ -842,7 +883,7 @@ export function spMiniTree(seed: number): G {
 }
 
 /** 木筏（海上）：带帆，人坐在上面 */
-export function spMiniRaft(): G {
+export function spMiniRaft(passengers = 0): G {
   const g = new G(16, 15);
   for (let i = 0; i < 4; i++) {
     g.rect(2 + i * 3, 9, 3, 4, 'w2');
@@ -856,6 +897,11 @@ export function spMiniRaft(): G {
   g.set(5, 5, 'i10');
   g.rect(4, 6, 3, 3, 'i3');
   g.set(8, 5, 'y1');
+  // 随船的同伴：小人站在甲板上（最多 3 个：桅杆前、船头、帆下）
+  for (const x of [7, 1, 13].slice(0, passengers)) {
+    g.rect(x, 5, 2, 1, 'i10');
+    g.rect(x, 6, 2, 3, 'i9');
+  }
   g.meta = { lantern: [8, 5] };
   return g.outline();
 }

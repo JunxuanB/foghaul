@@ -43,7 +43,7 @@ export function createGame(seed: number = newSeed()): GameState {
       lastMealNote: '',
       stock: {},
       output: {},
-      buildings: { lighthouse: t.kind === 'home', bed: t.kind === 'home', depot: false, helipad: false },
+      buildings: { lighthouse: t.kind === 'home', bed: t.kind === 'home', depot: false, helipad: false, autoStore: false },
       sleepy: false,
       prodAcc: 0,
       workNote: '',
@@ -127,6 +127,8 @@ export function createGame(seed: number = newSeed()): GameState {
     lastFight: null,
     today: {},
     report: null,
+    joined: [],
+    lastDeath: null,
     villages,
     flags: {
       farm: new Array(BALANCE.home.farm.plots).fill(null),

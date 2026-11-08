@@ -366,3 +366,14 @@ export const WATER_DISPUTE = {
     },
   ],
 };
+
+/** 目标 → 要去的岛（HUD 目标卡在那座岛有需求时画成需求格） */
+export const OBJECTIVE_ISLAND: Record<string, string> = {
+  engineer: 'stoneIsle',
+  lumberjack: 'forestIsle',
+  firstTraining: 'nativeA',
+  fisher: 'fisherIsle',
+  farmer: 'farmIsle',
+  doctor: 'herbIsle',
+  pilot: 'pilotIsle',
+};

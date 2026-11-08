@@ -56,7 +56,7 @@ export abstract class WorldScene extends Phaser.Scene {
     this.deaths = this.state.stats.deaths;
     // 进场景时从黑亮起
     this.fade = { t: 1, mid: null };
-    this.mask = this.textures.exists('fx_mask') ? (this.textures.get('fx_mask') as Phaser.Textures.CanvasTexture) : this.textures.createCanvas('fx_mask', VIEW.w + 1, VIEW.h + 1)!;
+    this.mask = this.canvasTex('fx_mask', VIEW.w + 1, VIEW.h + 1);
     this.maskImg = this.mask.context.createImageData(VIEW.w + 1, VIEW.h + 1);
     const cam = this.cameras.main;
     cam.setRoundPixels(true);
@@ -79,10 +79,20 @@ export abstract class WorldScene extends Phaser.Scene {
     for (const key of this.textures.getTextureKeys()) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 
+  /** 按画面大小建的画布：已有的大小不对（窗口变了）就重建 */
+  protected canvasTex(key: string, w: number, h: number): Phaser.Textures.CanvasTexture {
+    if (this.textures.exists(key)) {
+      const t = this.textures.get(key) as Phaser.Textures.CanvasTexture;
+      if (t.width === w && t.height === h) return t;
+      this.textures.remove(key);
+    }
+    return this.textures.createCanvas(key, w, h)!;
+  }
+
   /** 特效层：比画面大一圈的画布，按世界坐标摆放（见 drawFx 的说明） */
   protected fxCanvas(key: string, depth: number): FxLayer {
     const P = FX_PAD;
-    const tex = this.textures.exists(key) ? (this.textures.get(key) as Phaser.Textures.CanvasTexture) : this.textures.createCanvas(key, VIEW.w + P * 2, VIEW.h + P * 2)!;
+    const tex = this.canvasTex(key, VIEW.w + P * 2, VIEW.h + P * 2);
     const img = this.add.image(0, 0, key).setOrigin(0, 0).setDepth(depth);
     return { tex, img };
   }
@@ -104,7 +114,11 @@ export abstract class WorldScene extends Phaser.Scene {
       v.set({ panel: panel ? null : 'menu' });
       return true;
     }
-    const toggle = (id: 'inventory' | 'journal' | 'help' | 'map') => v.set({ panel: panel === id ? null : id });
+    const toggle = (id: 'inventory' | 'journal' | 'help' | 'map' | 'people') => v.set({ panel: panel === id ? null : id });
+    if (a === 'people') {
+      if (this.state.people.some((p) => p.active)) toggle('people');
+      return true;
+    }
     if (a === 'inventory') return toggle('inventory'), true;
     if (a === 'journal') return toggle('journal'), true;
     if (a === 'help') return toggle('help'), true;

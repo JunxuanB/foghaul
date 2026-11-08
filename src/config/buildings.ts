@@ -64,6 +64,8 @@ export const OBJ_DEFS: Record<string, ObjDef> = {
   board: { kind: 'board', foot: { x: -6, y: -4, w: 12, h: 4 }, hit: { x: -9, y: -8, w: 18, h: 8 } },
   // 设施建筑（所有设施共用一套范围，精灵按产物换，见 FACILITY_SPRITE）
   facility: { kind: 'facility', foot: { x: -14, y: -6, w: 28, h: 6 }, hit: { x: -17, y: -12, w: 34, h: 12 } },
+  // 设施地基：网络里还没有工作的岛（刚招募的原住民岛），在这里培训第一份工作
+  facilityBase: { kind: 'facility', foot: { x: -12, y: -5, w: 24, h: 5 }, hit: { x: -16, y: -12, w: 32, h: 12 } },
   // 停在码头边的木筏：货舱装卸、改造（在水里，不挡路）
   raft: { kind: 'raft', hit: { x: -21, y: -22, w: 42, h: 22 } },
   tree_d: { kind: 'decor', foot: { x: -5, y: -6, w: 10, h: 6 } },

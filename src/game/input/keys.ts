@@ -5,6 +5,7 @@ export type Action =
   | 'inventory'
   | 'map'
   | 'journal'
+  | 'people'
   | 'help'
   | 'use'
   | 'fish'
@@ -33,6 +34,7 @@ const ACTIONS: Record<string, Action> = {
   Tab: 'inventory',
   KeyM: 'map',
   KeyJ: 'journal',
+  KeyP: 'people',
   KeyH: 'help',
   KeyQ: 'use',
   KeyX: 'fish',

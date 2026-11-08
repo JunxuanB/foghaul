@@ -1,5 +1,5 @@
 // M2 的面板：灯塔（修建 / 查看）、和岛上的人说话（交付救援、招募物资）、海图（M）。
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BR } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ISLANDS } from '../../config/world';
@@ -7,6 +7,8 @@ import { t } from '../../i18n';
 import { buildCost, canUseStock, here } from '../../sim/actions';
 import { canPay, carriedForNeed, needItems } from '../../sim/inventory';
 import { charOf } from '../../sim/interact';
+import { jobMsg, personLabel } from '../../sim/people';
+import type { Island, Job, Person } from '../../sim/types';
 import { isLit } from '../../sim/map';
 import { useGame, useStore, useView } from '../../store/hooks';
 import { Card, Cell, label, Chip, CostGrid, Picture, Portrait } from '../components/Kit';
@@ -82,58 +84,111 @@ function LightRings({ r }: { r: number }) {
   return <canvas ref={ref} className="v-rings" width={n} height={n} style={{ ['--s' as string]: BALANCE.ui.lightDiagram }} />;
 }
 
-/** 对话：左边头像和名字，右边一句话（对白可以有强调色），下面是需要的东西（图标 + 已交 / 要多少 + 身上有多少），主按钮“交付” */
+/** 一个人这时候说的几句话（词典键）：没救出来时求助，救出来以后是平常话 */
+function linesOf(isl: Island, who: Person | undefined): string[] {
+  if (isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau') return ['island.' + isl.id + '.intro'];
+  const key = who?.role ?? 'native';
+  if (!who || !who.active) return ['talk.' + key + '.plea', 'talk.' + key + '.plea2'];
+  if (who.type === 'native') return [who.job ? 'talk.native.working' : 'talk.native.idle'];
+  return ['talk.' + key + '.idle'];
+}
+
+/**
+ * 对话：左边头像和身份，右边一句对白（对白可以有强调色），E / “下一句”往下说。
+ * 说完以后：没救出来的人显示“需要”的图标格（已交 / 要多少 + 身上有多少），主按钮“交付”；
+ * 救出来的同伴可以“跟我上船”（木筏要停在这座岛、还有座位）。
+ */
 export function TalkPanel() {
   const g = useGame();
   const store = useStore();
   const v = useView();
   const isl = here(g);
-  if (!isl) return null;
   const who = v.talkTo ? g.people.find((p) => p.id === v.talkTo) : undefined;
+  const lines = isl ? linesOf(isl, who) : [];
+  const [line, setLine] = useState(0);
+  const more = line < lines.length - 1;
+  useEffect(() => setLine(0), [v.talkTo, lines.length]);
+  // E / Enter：还有下一句就往下说（不会误按到“交付”）
+  useEffect(() => {
+    if (!more) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyE' && e.code !== 'Enter') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setLine((n) => n + 1);
+    };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [more]);
+  if (!isl) return null;
   const def = ISLANDS.find((x) => x.id === isl.id);
   const need = def?.rescueNeed ?? def?.recruitNeed;
-  const title = who ? label(who.name) : t('ui.villager');
+  const village = isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau';
+  const title = who ? label(personLabel(who)) : t('ui.villager');
   const face = (
     <div className="v-who">
       <Portrait char={who ? charOf(who) : 'islander'} name={title} big />
       {who?.role && t('role.' + who.role) !== title && <span className="u-dim">{t('role.' + who.role)}</span>}
     </div>
   );
+  const say = (
+    <div className="v-talk">
+      {face}
+      <p className="v-say">
+        <Rich s={t(lines[line] ?? '')} />
+        {more && <span className="v-more">▼</span>}
+      </p>
+    </div>
+  );
+  const next = (
+    <button className="u-btn" onClick={() => setLine(line + 1)}>
+      <span className="u-key">E</span> {t('ui.nextLine')}
+    </button>
+  );
   // 村落、进出口局：请求在请求板上（下一阶段开放）
-  if (!need || isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau') {
+  if (village || !need) return <Panel title={title} icon="ui_person" status={<span className="u-dim">{t('ui.villageSoon')}</span>} actions={more && next}>{say}</Panel>;
+  const done = need.every((n, i) => (isl.needProgress[i] ?? 0) >= n.n);
+  if (done && who && who.active) {
+    // 同伴：可以带上船
+    const seatsLeft = BALANCE.inventory.seats - g.player.aboard.length;
+    const canBoard = who.type === 'passenger' && g.player.hasRaft && seatsLeft > 0 && !who.learning;
     return (
-      <Panel title={title} icon="ui_person" status={<span className="u-dim">{t('ui.villageSoon')}</span>}>
-        <div className="v-talk">
-          {face}
-          <p className="v-say">
-            <Rich s={t('island.' + isl.id + '.intro')} />
-          </p>
-        </div>
+      <Panel
+        title={title}
+        icon="ui_person"
+        status={who.type === 'passenger' && seatsLeft <= 0 ? <span className="tone-b">{t('ui.seatsFull')}</span> : <span className="u-dim">{label(jobMsg(who.job ?? (isl.facility as Job | null)))}</span>}
+        actions={
+          more
+            ? next
+            : who.type === 'passenger' && (
+                <button className="u-btn" disabled={!canBoard} onClick={() => store.dispatch({ t: 'pickUp', personId: who.id })}>
+                  {t('ui.boardRaft')}
+                </button>
+              )
+        }
+      >
+        {say}
       </Panel>
     );
   }
-  const done = need.every((n, i) => (isl.needProgress[i] ?? 0) >= n.n);
   const canGive = !done && need.some((n, i) => (isl.needProgress[i] ?? 0) < n.n && carriedForNeed(g, n) > 0);
   return (
     <Panel
       title={title}
       icon="ui_person"
-      status={done ? <Chip icon="ui_check" tone="ok">{t('ui.talkDoneShort')}</Chip> : !canGive ? <span className="tone-b">{t('ui.nothingToGive')}</span> : null}
+      status={more ? null : done ? <Chip icon="ui_check" tone="ok">{t('ui.talkDoneShort')}</Chip> : !canGive ? <span className="tone-b">{t('ui.nothingToGive')}</span> : null}
       actions={
-        !done && (
-          <button className="u-btn" disabled={!canGive} onClick={() => store.dispatch({ t: 'deliver' })}>
-            {t('ui.give')}
-          </button>
-        )
+        more
+          ? next
+          : !done && (
+              <button className="u-btn" disabled={!canGive} onClick={() => store.dispatch({ t: 'deliver' })}>
+                {t('ui.give')}
+              </button>
+            )
       }
     >
-      <div className="v-talk">
-        {face}
-        <p className="v-say">
-          <Rich s={done ? t(who?.active ? 'ui.talkThanks' : 'ui.talkDone') : t(isl.kind === 'native' ? 'ui.talkNative' : 'ui.talkPassenger')} />
-        </p>
-      </div>
-      {!done && (
+      {say}
+      {!done && !more && (
         <Card title={t('ui.needs')} icon="ui_warn">
           <span className="k-cells">
             {need.map((n, i) => {

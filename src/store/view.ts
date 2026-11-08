@@ -4,7 +4,7 @@ import type { ObjKind } from '../config/buildings';
 import type { ItemId } from '../config/items';
 import type { Msg } from '../sim/msg';
 
-export type PanelId = 'inventory' | 'craft' | 'chest' | 'lighthouse' | 'wreck' | 'journal' | 'help' | 'menu' | 'map' | 'talk' | 'raft' | 'facility';
+export type PanelId = 'inventory' | 'craft' | 'chest' | 'lighthouse' | 'wreck' | 'journal' | 'help' | 'menu' | 'map' | 'talk' | 'raft' | 'facility' | 'people';
 
 /** 打开时暂停时间的面板（菜单、帮助） */
 export const PAUSING_PANELS: PanelId[] = ['menu', 'help'];
@@ -34,7 +34,8 @@ export interface ViewState {
   focus: { id: string; kind: ObjKind } | null;
   prompts: Prompt[];
   /** 初见介绍卡 */
-  intro: { kind: ObjKind; until: number } | null;
+  /** 初见介绍：物体种类，或者有自己介绍的精灵名（设施地基） */
+  intro: { kind: string; until: number } | null;
   /** 正在做的动作（采集） */
   action: { label: Msg; start: number; end: number } | null;
   hotbar: number;
@@ -56,6 +57,9 @@ export interface ViewState {
   labels: { id: string; dim: boolean }[];
   /** 画面放大倍数 */
   k: number;
+  /** 画面的逻辑大小（游戏像素），按屏幕算出来（game/index.ts 的 fitView） */
+  vw: number;
+  vh: number;
   /** 调试：手动指定的时刻（分钟） */
   debugMinute: number | null;
 }
@@ -75,6 +79,8 @@ export class ViewStore {
     anchors: { player: { x: 0, y: 0 }, promptBelow: false, intro: null, edge: null, uiTarget: null, labels: {} },
     labels: [],
     k: 2,
+    vw: 480,
+    vh: 270,
     debugMinute: null,
   };
   version = 0;

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { BR, blendTable, phaseAt } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEMS } from '../../config/items';
-import { slotView } from '../../sim/inventory';
 import { t, tm } from '../../i18n';
 import { dayOf, minuteOfDay } from '../../sim/clock';
 import { currentGuide } from '../../sim/guide';
@@ -14,6 +13,9 @@ import { towardsMsg } from '../../sim/hints';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
 import { Rich } from '../components/Text';
 import { ItemName, Slot } from '../components/Item';
+import { Cell } from '../components/Kit';
+import { ISLANDS } from '../../config/world';
+import { needItems, slotView } from '../../sim/inventory';
 
 /** 第一次出现时闪两下 */
 function useFlash(on: boolean): string {
@@ -69,6 +71,23 @@ function Status() {
   );
 }
 
+/** 目标的需求格：要去的岛已经找到、还没交齐时，画成“岛名 + 物品格（已交 / 要多少）”，不写句子 */
+function GoalNeeds({ isl }: { isl: string }) {
+  const g = useGame();
+  const i = g.islands.find((x) => x.id === isl);
+  const def = ISLANDS.find((x) => x.id === isl);
+  const need = def?.rescueNeed ?? def?.recruitNeed;
+  if (!i || !i.discovered || i.owned || !need) return null;
+  return (
+    <div className="goal-needs">
+      <span className="goal-isl">{t('island.' + isl)}</span>
+      {need.map((n, k) => (
+        <Cell key={k} id={needItems(n)[0]} have={i.needProgress[k] ?? 0} need={n.n} />
+      ))}
+    </div>
+  );
+}
+
 function Goal() {
   const g = useGame();
   const show = has(g, 'goal');
@@ -77,6 +96,7 @@ function Goal() {
   const step = currentGuide(g);
   let title: string;
   let detail: string;
+  let isl: string | undefined;
   if (step) {
     title = t('guide.' + step.id);
     detail = tm(step.detail(g));
@@ -85,7 +105,9 @@ function Goal() {
     if (!o) return null;
     title = tm(o.title);
     detail = tm(o.detail);
+    isl = o.isl;
   }
+  const needs = isl ? <GoalNeeds isl={isl} /> : null;
   return (
     <div className="hud-tr">
       <div className={'u-panel goal' + f}>
@@ -93,9 +115,11 @@ function Goal() {
         <b>
           <Rich s={title} />
         </b>
-        <p>
-          <Rich s={detail} />
-        </p>
+        {needs ?? (
+          <p>
+            <Rich s={detail} />
+          </p>
+        )}
       </div>
       <Towards />
     </div>

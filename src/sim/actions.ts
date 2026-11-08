@@ -5,7 +5,7 @@ import { ENDING_LINES, FLIGHT_LINES } from '../config/text';
 import { ISLANDS } from '../config/world';
 import { advance } from './advance';
 import { canSleepNow, untilMorning } from './clock';
-import { canLevelUp, levelUp, peopleCap, relieve, upgradeCostOf } from './economy';
+import { canLevelUp, flushOutput, levelUp, peopleCap, relieve, upgradeCostOf } from './economy';
 import { bureauHourly, exportGoods, upgradeCost } from './endgame';
 import {
   addToStock,
@@ -33,7 +33,7 @@ import { gainPlayerXp, learnRecipe, playerLevel } from './progression';
 import { chance } from './rng';
 import { onMove, takeCrate } from './seaEvents';
 import { createRoute, deleteRoute, freeRafts, priorityUnlocked, reserveUnlocked, routeEndpoints, targetUnlocked } from './transport';
-import type { Command, GameState, Island, Job, Result, Stock } from './types';
+import type { BuildWhat, Command, GameState, Island, Job, Result, Stock } from './types';
 import { findIsland, island, islandAt, person, stockAdd, stockGet } from './util';
 import { deliverVillage, resolveWaterDispute, villageOf } from './villages';
 
@@ -400,6 +400,7 @@ function rescue(state: GameState, isl: Island): void {
   const pass = state.people.find((x) => x.type === 'passenger' && x.loc.kind === 'island' && x.loc.id === isl.id && !x.active);
   if (!pass || !pass.role) return;
   pass.active = true;
+  state.joined.push(pass.id);
   const role = pass.role;
   say(state, `rescue.${role}.thanks`);
   if (role !== 'pilot') {
@@ -423,7 +424,9 @@ function rescue(state: GameState, isl: Island): void {
 }
 
 function recruit(state: GameState, isl: Island): void {
-  for (const p of state.people) if (p.type === 'native' && p.loc.kind === 'island' && p.loc.id === isl.id) p.active = true;
+  const natives = state.people.filter((p) => p.type === 'native' && p.loc.kind === 'island' && p.loc.id === isl.id);
+  for (const p of natives) p.active = true;
+  if (natives[0]) state.joined.push(natives[0].id);
   isl.owned = true;
   say(state, 'log.recruited', { isl: islandM(isl.id) }, 'got');
 }
@@ -455,7 +458,7 @@ function deliver(state: GameState): Result {
 
 // ---------------------------------------------------------------- 建设
 
-export function buildCost(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad' | 'holdUpgrade'): Stock | null {
+export function buildCost(state: GameState, what: BuildWhat): Stock | null {
   if (what === 'holdUpgrade') {
     const c = H.holdUpgrade.woodCosts[state.player.holdUpgrades];
     return c === undefined ? null : { wood: c };
@@ -468,7 +471,7 @@ export function buildCost(state: GameState, what: 'lighthouse' | 'bed' | 'depot'
   return BALANCE.buildings[what].cost as Stock;
 }
 
-function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad' | 'holdUpgrade'): Result {
+function build(state: GameState, what: BuildWhat): Result {
   const at = here(state);
   if (!at) return fail('err.notDocked');
   // 灯塔可以修在任何岛上（村落、礁石也行）；其他建筑只能修在网络内的岛
@@ -484,6 +487,7 @@ function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad
   } else {
     if (isl.buildings[what]) return fail('err.built');
     if (what === 'helipad' && !state.flags.planeRepaired) return fail('err.needPlane');
+    if (what === 'autoStore' && !isl.facility) return fail('err.noFacility');
   }
   if (!canPay(state, src, cost)) return fail('err.missing', { list: stockP(missingCost(state, src, cost)) });
   pay(state, src, cost);
@@ -496,6 +500,7 @@ function build(state: GameState, what: 'lighthouse' | 'bed' | 'depot' | 'helipad
   }
   isl.buildings[what] = true;
   if (what === 'lighthouse') lightFrom(state, isl);
+  if (what === 'autoStore') flushOutput(state, isl);
   say(state, 'log.built.' + what, { isl: islandM(isl.id) }, 'got');
   advance(state, BALANCE.buildings[what].minutes);
   return OK;
@@ -941,6 +946,12 @@ function run(state: GameState, cmd: Command): Result {
       return collect(state, cmd.to, cmd.item);
     case 'fillCup':
       return fillCup(state);
+    case 'ackJoined':
+      state.joined.shift();
+      return OK;
+    case 'ackDeath':
+      if (state.lastDeath) state.lastDeath.seen = true;
+      return OK;
     case 'ackReport':
       if (state.report) state.report.seen = true;
       return OK;

@@ -123,13 +123,17 @@ function load(state: GameState, r: Route, at: Island, dest: Island): void {
   if (r.load && r.load.item !== item) return;
   const have = r.load?.n ?? 0;
   const reserve = reserveUnlocked(state) ? at.reserve[item] ?? 0 : 0;
-  let n = Math.min(T.capacity - have, spareStock(state, at, item, reserve + claims(state, r, at.id, item)));
+  // 运输队哪里有从哪拿：先拿设施暂存箱里的，再拿储物箱里的（储物箱要给岛民留口粮）
+  const fromBox = stockGet(at.output, item);
+  let n = Math.min(T.capacity - have, fromBox + spareStock(state, at, item, reserve + claims(state, r, at.id, item)));
   const tgt = dest.target[item];
   if (targetUnlocked(state) && tgt !== undefined && dest.kind !== 'bureau') {
     n = Math.min(n, Math.max(0, tgt - stockGet(dest.stock, item) - have));
   }
   if (n <= 0) return;
-  stockAdd(at.stock, item, -n);
+  const a = Math.min(n, fromBox);
+  stockAdd(at.output, item, -a);
+  stockAdd(at.stock, item, -(n - a));
   r.load = { item, n: have + n };
 }
 

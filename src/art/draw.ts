@@ -91,6 +91,8 @@ export function allSprites(): Record<string, G> {
     oven: S.spOven(),
     saltPan: S.spSaltPan(),
     board: S.spBoard(),
+    facilityBase: S.spFacilityBase(),
+    autoStore: S.spAutoStore(),
     // 其他岛上装饰用的树（和主岛能采的树同一种画法）
     tree_d: S.spTree(5, true),
     stree_d: S.spTree(13, false),
@@ -100,6 +102,9 @@ export function allSprites(): Record<string, G> {
     mtree: S.spMiniTree(5),
     mtree2: S.spMiniTree(9),
     mraft: S.spMiniRaft(),
+    mraft1: S.spMiniRaft(1),
+    mraft2: S.spMiniRaft(2),
+    mraft3: S.spMiniRaft(3),
     float: S.spFloat(),
   };
   for (const id of Object.keys(S.CHARS))

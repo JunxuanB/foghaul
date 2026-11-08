@@ -56,7 +56,7 @@ i18n/     中英词典
 | `lastFight` | 最近一次海上战斗（界面显示一张小卡片） |
 | `pendingCrate.x / y` | 漂流物在海面上的位置 |
 
-存档：`sim/save.ts`，`SAVE_VERSION = 5`，键 `foghaul2d.save.v1`（v4：每座岛都长树和草药；v5：设施暂存箱 `isl.output`、`state.today`、`state.report`。旧档里超出新格子的东西保留，只是放不进新的）。读旧档的测试在 `tests/storage2d.test.ts`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
+存档：`sim/save.ts`，`SAVE_VERSION = 6`（v6：自动入库机、`joined`、`lastDeath`，A 段四座岛按新地图重新长树和草药），键 `foghaul2d.save.v1`（v4：每座岛都长树和草药；v5：设施暂存箱 `isl.output`、`state.today`、`state.report`。旧档里超出新格子的东西保留，只是放不进新的）。读旧档的测试在 `tests/storage2d.test.ts`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
 
 界面临时状态（不存档）在 `store/view.ts` 的 `ViewState`：开着的面板、选中的物体、按键提示、初见介绍、正在做的动作、快捷栏选中格、“+1”、调试用的画面时刻。
 
@@ -86,7 +86,8 @@ i18n/     中英词典
 
 ## 6. 走路和镜头
 
-- **画布按屏幕分辨率渲染**：画布 480k × 270k（k 为放大倍数），镜头 `setZoom(k)`。像素块大小不变，但人物和镜头可以移动 1/k 游戏像素，所以走路顺滑。不要回到“480 × 270 画布再用 CSS 放大”，那样只能整像素移动，斜着走必然一顿一顿。
+- **画面大小按窗口算**：`game/index.ts` 的 `fitView(W, H)` 选整数倍 k，让一屏大约 `VIEW_FIT.targetW` 游戏像素宽（游戏整体放大），逻辑大小 `VIEW.w × VIEW.h` 跟着窗口比例变、铺满窗口（有上下限，面板 320 × 200 要放得下；窗口太小才用小数倍）。`VIEW` 是可变的：一律读 `VIEW.w` / `VIEW.h` 的当前值，不要在模块加载时缓存。窗口变化导致逻辑大小变了，重开当前场景；按画面大小建的画布用 `WorldScene.canvasTex()`（大小不对就重建）。界面层用 `view.vw` / `view.vh`，CSS 里是 `--vw` / `--vh`（HUD 左下角的宽度按它算，不伸到快捷栏底下）。
+- **画布按屏幕分辨率渲染**：画布 (VIEW.w·k) × (VIEW.h·k)，镜头 `setZoom(k)`。像素块大小不变，但人物和镜头可以移动 1/k 游戏像素，所以走路顺滑。不要回到“480 × 270 画布再用 CSS 放大”，那样只能整像素移动，斜着走必然一顿一顿。
 - `IslandScene.walk()`：连续坐标，方向归一化，任何方向都是 `BALANCE.interact.walkSpeed` 像素/秒（斜着走不会更快）。分两个方向分别检查碰撞，撞墙时沿墙滑。斜着走的朝向取左右。
 - `placeCamera()`：镜头左上角 `camX`、`camY`（游戏像素，对齐到 1/k），在地图边缘停住，用 `centerOn` 摆镜头。需要“镜头在哪”时一律用 `camX`、`camY`，不要读 `cam.scrollX`（缩放后两者不一样）。
 - **会动的精灵绘制位置要对齐到屏幕像素**：`snap(v, cam)` = 镜头左上角 + 整数个屏幕像素。人物停在半个屏幕像素上时像素块宽窄不齐、会糊会闪。新加会动的东西（木筏、NPC）也用它。
@@ -170,8 +171,21 @@ i18n/     中英词典
 - 加入网络、有了工作（`island.facility`）的岛，在模板的 `slots.facility` 位置出现设施建筑（`facility@<岛>`）。精灵按产物或配方选（`config/buildings.ts` 的 `FACILITY_SPRITE`）。
 - 产物去哪：`economy.ts` 的 `produce`：淡水进水缸，其他进暂存箱；每产一个记进 `dayLog(state, isl).made`。
 - 头顶：进度条 = `island.prodAcc` 的小数部分；停工（`islandRate` 为 0 或犯困）时换成一个慢慢浮动的气泡，里面是停工原因的图标（`config/visual.ts` 的 `WORK_ICON`：缺人、缺饭、满仓、犯困……，设施面板用同一张表）。等级画在建筑上：2 级起屋顶插一面小旗，3 级两面（`IslandScene.drawFacilityStatus`）。有火的设施（蒸馏棚、烤炉）夜里发光。
-- 设施面板（`ui/panels/IslandPanels.tsx`，“建筑详情”模板）：左边设施的图和等级星；右边三张卡按主次排——①产出（产物大图标、每小时多少、运转 / 停工原因；下面是暂存箱的格子和“拿到背包”“全部放进仓库”，产淡水的设施换成水缸的水位条）②工人（头像格，空位是虚线人形）③升级卡（连续吃饱画成碗、材料格、升级后“现在 → 以后”的产量 / 上限 / 人数）。底栏左边是还差什么，右边“升到 N 级”按钮，两个条件都满足才亮。“培训”是灰着的分页，点开显示“下一阶段开放”。
+- 设施面板（`ui/panels/IslandPanels.tsx`，“建筑详情”模板）：左边设施的图和等级星；右边三张卡按主次排——①产出（产物大图标、每小时多少、运转 / 停工原因；下面是暂存箱的格子和“拿到背包”“全部放进仓库”，产淡水的设施换成水缸的水位条）②工人（头像格，空位是虚线人形）③升级卡（连续吃饱画成碗、材料格、升级后“现在 → 以后”的产量 / 上限 / 人数）。底栏左边是还差什么，右边“升到 N 级”按钮，两个条件都满足才亮。三个分页：生产、改造（自动入库机）、培训。
 - **升级**：`economy.ts` 吃饭时只累计 `mealStreak`，够了写一条日志；玩家在设施旁发 `{ t: 'upgradeIsland' }`，规则层检查连续吃饱、扣 `BALANCE.economy.upgradeCost` 的材料，再 `levelUp`（灯塔照得更远）。不要再在吃饭里自动升级。
+
+- **自动入库机**：`buildings.autoStore`，命令 `build { what: 'autoStore' }`（在设施旁，`BALANCE.buildings.autoStore` 的材料）。装好后 `produce` 每产一个就 `flushOutput()`：暂存箱的东西放进储物箱，放不下的留在暂存箱。
+- **运输线取货**（`transport.ts` 的 `load`）：先拿暂存箱里的，再拿储物箱里的（储物箱要给岛民留口粮）。
+
+## 10.7 同伴、原住民、培训（M3）
+
+- **对话**：`SeaPanels.tsx` 的 `TalkPanel`。对白按句推进：`linesOf(isl, who)` 给出词典键（没救出来 `talk.<身份>.plea`、`plea2`，救出来 `talk.<身份>.idle`，原住民 `talk.native.*`），E / Enter / “下一句”往下说（面板开着时在 window 上抢先处理 E，不会误按“交付”）。说完最后一句才显示“需要”格和“交付”；救出来的同伴显示“跟我上船”。
+- **加入了**：`rescue()` / `recruit()` 把人的 id 放进 `state.joined`，`ui/popups/JoinedPopup.tsx` 逐个弹（暂停时间，比新配方弹窗优先），`ackJoined` 出队。弹窗的 Esc / Enter / E 用 `useAckKeys`。
+- **随船人员**：`player.aboard`（最多 `BALANCE.inventory.seats`）。`pickUp` 要在那个人旁边（`objectFor` → `npc`），`dropOff` 在木筏旁（→ `raft`，木筏面板的“乘客”分页）。画面：海上的小木筏按人数换图（`mraft`、`mraft1`–`3`），码头边的木筏上站着同伴的精灵（`IslandScene.updateObjects`）。木筏停在码头旁刚过浪花的水里（`world/island.ts` 的 `raftAt`，按高度找，不放到外圈的雾里）。
+- **培训**：设施面板的“培训”分页（`IslandPanels.tsx` 的 `useTraining`）：学生 = 这座岛的原住民，老师 = 在场（岛上 + 船上）且 `teachableJobs` 不为空的同伴，工作 = 老师能教的。命令 `train` 要在设施旁（`objectFor` → `facility`）。网络里还没有设施的原住民岛，设施槽位上是**设施地基**（精灵 `facilityBase`，种类还是 `facility`，有自己的初见介绍 `intro2d.facilityBase`），培训后变成设施。
+- **人物面板**（P）：`Panels.tsx` 的 `PeoplePanel`，一人一张卡。
+- **倒下**：`advance.ts` 的 `die()` 记 `state.lastDeath`，`DeathPopup` 弹卡片，`ackDeath`。
+- **专门地图**：`config/maps.ts` 的 `MAPS` 里有 `stoneIsle`、`forestIsle`、`nativeA`、`fisherIsle`；其他岛还用通用模板。
 
 ## 10.6 昨日收成
 

@@ -4,7 +4,14 @@
 // =====================================================================
 
 /** 原生分辨率 */
-export const VIEW = { w: 480, h: 270 } as const;
+/**
+ * 画面的逻辑大小（游戏像素）。不是固定的：启动和窗口变化时按屏幕算（game/index.ts 的 fitView），
+ * 让画面按整数倍放大、铺满窗口，一屏大约 VIEW_FIT.target 宽。读的时候总是读 VIEW.w / VIEW.h 的当前值。
+ */
+export const VIEW = { w: 480, h: 270 };
+
+/** 画面放多大：一屏大约显示多少游戏像素（越小画面越大）；面板 320 × 200 要放得下，所以有最小值 */
+export const VIEW_FIT = { targetW: 400, targetH: 225, minW: 336, minH: 210, maxW: 520, maxH: 300 };
 
 /** B 方案 12 色：0–7 冷色画世界，8–11 暖色只给人造的东西和火光 */
 export const PALETTE = [

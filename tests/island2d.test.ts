@@ -44,7 +44,7 @@ describe('every island has a walkable map', () => {
       expect(canStand(R, ...L.spawn)).toBe(true);
       const reach = BALANCE.interact.reach;
       const t = L.template;
-      const slotPts: [number, number][] = [...(t.slots?.npc ?? []), ...[t.slots?.lighthouse, t.slots?.workbench, t.slots?.chest, t.slots?.board].filter((x): x is [number, number] => !!x)];
+      const slotPts: [number, number][] = [...(t.slots?.npc ?? []), ...[t.slots?.lighthouse, t.slots?.workbench, t.slots?.chest, t.slots?.board, t.slots?.facility].filter((x): x is [number, number] => !!x)];
       const targets = [...L.objects.filter((o) => o.kind !== 'decor' && o.hit).map((o) => ({ id: o.id, r: o.hit! })), ...slotPts.map(([x, y], i) => ({ id: 'slot' + i, r: { x: x - 10, y: y - 10, w: 20, h: 10 } }))];
       for (const o of targets) {
         let ok = false;

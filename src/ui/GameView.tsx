@@ -2,13 +2,14 @@
 import { useEffect, useRef } from 'react';
 import type Phaser from 'phaser';
 import { BALANCE } from '../config/balance';
-import { VIEW } from '../config/visual';
 import { useStore, useView, useViewStore } from '../store/hooks';
 import { Hud } from './hud/Hud';
 import { WorldLayer } from './hud/WorldLayer';
 import { PanelHost } from './panels/Panels';
 import { RecipePopup } from './popups/RecipePopup';
 import { ReportPopup } from './popups/ReportPopup';
+import { JoinedPopup } from './popups/JoinedPopup';
+import { DeathPopup } from './popups/DeathPopup';
 import { DevPanel } from './DevPanel';
 
 const SHOW_DEV = import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
@@ -36,14 +37,16 @@ export function GameView() {
   const k = v.k;
   return (
     <div className="stage-wrap" ref={outer}>
-      <div className="stage" style={{ width: VIEW.w * k, height: VIEW.h * k, ['--k' as string]: k, ['--pw' as string]: BALANCE.ui.panel.w, ['--ph' as string]: BALANCE.ui.panel.h }}>
+      <div className="stage" style={{ width: v.vw * k, height: v.vh * k, ['--k' as string]: k, ['--vw' as string]: v.vw, ['--vh' as string]: v.vh, ['--pw' as string]: BALANCE.ui.panel.w, ['--ph' as string]: BALANCE.ui.panel.h }}>
         <div className="canvas-host" ref={host} />
         <Hud />
         <div className="hud">
           <WorldLayer />
         </div>
         <PanelHost />
+        <JoinedPopup />
         <RecipePopup />
+        <DeathPopup />
         <ReportPopup />
       </div>
       {SHOW_DEV && <DevPanel />}
