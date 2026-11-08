@@ -8,9 +8,10 @@ import { DAY, pal, rgb, type Pal } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
 import { ANIM, LIGHTS, SEA_ART, VIEW } from '../../config/visual';
-import { currentGuide } from '../../sim/guide';
+import { pointerStep } from '../../sim/guide';
 import { carried, slotView } from '../../sim/inventory';
 import { canEnter, isLit } from '../../sim/map';
+import { boatPos } from '../../sim/transport';
 import { m } from '../../sim/msg';
 import { playerLevel } from '../../sim/progression';
 import type { GameState, Island } from '../../sim/types';
@@ -84,6 +85,8 @@ export class SeaScene extends WorldScene {
   create(): void {
     this.setupWorld();
     const s = this.state;
+    this.cargoImgs = new Map();
+    this.cargoLast = new Map();
     this.pw = s.width * T;
     this.ph = s.height * T;
     this.rx = s.raft.x;
@@ -394,6 +397,7 @@ export class SeaScene extends WorldScene {
     this.sailRaft(dt);
     this.placeCamera();
     this.updateRaftSprite();
+    this.updateCargoRafts();
     this.updatePrompts();
     this.updateGuide();
     this.updateLabels();
@@ -495,6 +499,41 @@ export class SeaScene extends WorldScene {
     } else this.crate.setVisible(false);
   }
 
+  /**
+   * 运输线的木筏在海面上真的开来开去：位置来自规则层的 boatPos（格子坐标，先横后竖），
+   * 装着货时甲板上有货箱；在迷雾里的不画。
+   */
+  private cargoImgs = new Map<string, Img>();
+  private cargoLast = new Map<string, number>();
+  private updateCargoRafts(): void {
+    const s = this.state;
+    const seen = new Set<string>();
+    for (const r of s.transport.routes) {
+      const p = boatPos(s, r);
+      const x = p.x * T + T / 2;
+      const y = p.y * T + T / 2 + 4;
+      const visible = isLit(s, Math.round(p.x), Math.round(p.y));
+      seen.add(r.id);
+      let img = this.cargoImgs.get(r.id);
+      if (!img) {
+        img = this.add.image(x, y, 'mcargo').setOrigin(0.5, 1);
+        this.cargoImgs.set(r.id, img);
+      }
+      const key = r.load ? 'mcargo1' : 'mcargo';
+      if (img.texture.key !== key) img.setTexture(key);
+      const dx = x - (this.cargoLast.get(r.id) ?? x);
+      if (Math.abs(dx) > 0.001) img.setFlipX(dx < 0);
+      this.cargoLast.set(r.id, x);
+      const bob = Math.round(Math.sin(this.t * 1.6 + r.no) * 1);
+      img.setPosition(this.snap(x, this.camX), this.snap(y, this.camY) + bob).setDepth(y).setVisible(visible);
+    }
+    for (const [id, img] of this.cargoImgs) {
+      if (seen.has(id)) continue;
+      img.destroy();
+      this.cargoImgs.delete(id);
+    }
+  }
+
   /** 按键提示：警告 > E 靠岸 > F 捞 > X / Z，最多 3 条 */
   private updatePrompts(): void {
     const v = this.ctx.view;
@@ -518,7 +557,7 @@ export class SeaScene extends WorldScene {
   /** 引导：指向要去的岛 */
   private updateGuide(): void {
     const s = this.state;
-    const step = currentGuide(s);
+    const step = pointerStep(s);
     const v = this.ctx.view;
     let id: string | null = null;
     if (step && !v.s.panel) id = step.target.kind === 'island' ? step.target.id : step.at ?? null;

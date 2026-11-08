@@ -121,7 +121,7 @@ export const WORK_ICON: Record<string, string> = {
   'work.starved': 'ui_bowlEmpty',
   'work.baseOnly': 'ui_bowlEmpty',
   'work.partial': 'ui_bowlEmpty',
-  'work.sleepy': 'ui_warn',
+  'work.sleepy': 'ui_zzz',
   'work.full': 'ui_stock',
   'work.outputFull': 'ui_stock',
   'work.tankFull': 'ui_tank',

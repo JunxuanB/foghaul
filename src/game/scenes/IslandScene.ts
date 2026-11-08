@@ -8,7 +8,7 @@ import { DAY, type Pal } from '../../art/palette';
 import { BALANCE } from '../../config/balance';
 import { ITEM_ORDER, ITEMS, type ItemId } from '../../config/items';
 import { ANIM, LIGHTS, VIEW, WORK_ICON } from '../../config/visual';
-import { currentGuide } from '../../sim/guide';
+import { pointerStep } from '../../sim/guide';
 import { carried, slotView } from '../../sim/inventory';
 import { charOf, interactInfo, objectsOn, personOfObj } from '../../sim/interact';
 import type { Command, Facing, GameState } from '../../sim/types';
@@ -143,6 +143,14 @@ export class IslandScene extends WorldScene {
     if (a === 'drink') this.ctx.store.dispatch({ t: 'drinkSea' });
   }
 
+  /** 庆祝：人物头顶一圈亮片，分三次撒（升级、有人加入、修好飞机） */
+  protected onFx(e: string): void {
+    if (e !== 'celebrate') return;
+    const w = this.state.walk;
+    for (let k = 0; k < 3; k++)
+      this.time.delayedCall(k * 180, () => this.parts.burst(10, w.x + (k - 1) * 8, w.y - 30, ['y1', 'fw', 'e3', 'fy'], { speed: 40, up: 50, g: 60, floor: w.y + 2, life: 1.4 }, this.rnd));
+  }
+
   protected onDied(): void {
     this.cancelAction();
   }
@@ -183,7 +191,20 @@ export class IslandScene extends WorldScene {
       case 'raft':
         return v.set({ panel: 'raft' });
       case 'facility':
+        // 犯困的工人：按 E 叫醒，不开面板
+        if (island(this.state, this.isl).sleepy) {
+          this.ctx.store.dispatch({ t: 'wake' });
+          return;
+        }
         return v.set({ panel: 'facility' });
+      case 'board':
+      case 'school':
+      case 'shipyard':
+      case 'plot':
+      case 'office':
+      case 'helipad':
+      case 'farm':
+        return v.set({ panel: o.kind });
       case 'npc':
         return v.set({ panel: 'talk', talkTo: personOfObj(this.state, o.id)?.id ?? null });
       case 'dock':
@@ -463,7 +484,7 @@ export class IslandScene extends WorldScene {
   private updateGuide(): void {
     const s = this.state;
     const v = this.ctx.view;
-    const step = currentGuide(s);
+    const step = pointerStep(s);
     let tx: number | null = null;
     let ty = 0;
     let uiTarget: string | null = null;
@@ -596,22 +617,29 @@ export class IslandScene extends WorldScene {
         const [fx, fy] = g.meta.flame as [number, number];
         const img = this.add.image(ox + fx - 4, oy + fy - 8, key).setOrigin(0, 0).setDepth(o.y + 0.1);
         this.flames.set(o.id, { tex, img });
-      } else if (o.sprite === 'house') {
-        const key = 'glow_' + o.sprite;
-        if (!this.textures.exists(key)) {
-          const cv = mkCanvas(g.w, g.h);
-          const c = cv.getContext('2d')!;
-          for (const [x, y, w, h] of g.meta.win as [number, number, number, number][]) {
-            px(c, DAY, 'y0', x, y, w, h);
-            px(c, DAY, 'y1', x + 2, y + 2, w - 4, h - 4);
-            px(c, DAY, 'w0', x + 7, y, 1, h);
-            px(c, DAY, 'w0', x, y + 5, w, 1);
-          }
-          this.textures.addCanvas(key, cv);
-        }
-        this.glows.set(o.id, this.add.image(ox, oy, key).setOrigin(0, 0).setDepth(o.y + 0.1).setVisible(false));
-      }
+      } else if (g.meta.win) this.makeGlow(o);
     }
+  }
+
+  /** 亮着的窗（夜里显示）：有窗的精灵（小屋、村里的房子、学堂、进出口局）都有一张 */
+  private makeGlow(o: WorldObj): Img | undefined {
+    const g = allSprites()[o.sprite];
+    if (!g?.meta.win) return undefined;
+    const key = 'glow_' + o.sprite;
+    if (!this.textures.exists(key)) {
+      const cv = mkCanvas(g.w, g.h);
+      const c = cv.getContext('2d')!;
+      for (const [x, y, w, h] of g.meta.win as [number, number, number, number][]) {
+        px(c, DAY, 'y0', x, y, w, h);
+        if (w > 4 && h > 4) px(c, DAY, 'y1', x + 2, y + 2, w - 4, h - 4);
+        if (w >= 12) px(c, DAY, 'w0', x + (w >> 1), y, 1, h);
+        if (h >= 10) px(c, DAY, 'w0', x, y + (h >> 1), w, 1);
+      }
+      this.textures.addCanvas(key, cv);
+    }
+    const img = this.add.image(o.x - (g.w >> 1), o.y - g.h + 1, key).setOrigin(0, 0).setDepth(o.y + 0.1).setVisible(false);
+    this.glows.set(o.id, img);
+    return img;
   }
 
   /** 篝火火苗：(wx, wy) 为火苗底部的世界坐标，k 为帧号 */
@@ -733,21 +761,26 @@ export class IslandScene extends WorldScene {
         const fy = oy + fy0;
         this.drawFlame(o.id, fx + cx, fy + cy, k);
         spots.push([fx, fy, (LIGHTS.fire + Math.round(Math.sin(t * 9) * LIGHTS.fireFlicker)) * strength]);
-      } else if (o.sprite === 'house') {
-        const [chx, chy] = g.meta.chim as [number, number];
-        for (let i = 0; i < 7; i++) {
-          const a = (t * 0.2 + i / 7) % 1;
-          const x = ox + chx + Math.round(a * 14 + Math.sin(a * 6 + i) * 2);
-          const y = oy + chy - Math.round(a * 40);
-          const sz = a < 0.3 ? 2 : 3;
-          if (a > 0.7 && (x + y) & 1) continue;
-          px(c, P, 'smoke', x, y, sz, sz);
+      } else if (g.meta.win) {
+        if (g.meta.chim) {
+          const [chx, chy] = g.meta.chim as [number, number];
+          for (let i = 0; i < 7; i++) {
+            const a = (t * 0.2 + i / 7) % 1;
+            const x = ox + chx + Math.round(a * 14 + Math.sin(a * 6 + i) * 2);
+            const y = oy + chy - Math.round(a * 40);
+            const sz = a < 0.3 ? 2 : 3;
+            if (a > 0.7 && (x + y) & 1) continue;
+            px(c, P, 'smoke', x, y, sz, sz);
+          }
         }
         const wins = g.meta.win as [number, number, number, number][];
-        this.glows.get(o.id)?.setVisible(strength > LIGHTS.windowGlowFrom);
+        // 跟着存档出现的房子（建好的小屋、学堂）第一次画到时才做亮窗
+        (this.glows.get(o.id) ?? this.makeGlow(o))?.setVisible(strength > LIGHTS.windowGlowFrom);
         for (const [x, y, w, h] of wins) spots.push([ox + x + w / 2, oy + y + h / 2, LIGHTS.window * strength]);
-        const [lx, ly] = g.meta.lantern as [number, number];
-        spots.push([ox + lx, oy + ly, LIGHTS.doorLamp * strength]);
+        if (g.meta.lantern) {
+          const [lx, ly] = g.meta.lantern as [number, number];
+          spots.push([ox + lx, oy + ly, LIGHTS.doorLamp * strength]);
+        }
       } else if (o.sprite === 'light') {
         const [lx, ly] = g.meta.lamp as [number, number];
         spots.push([ox + lx, oy + ly, LIGHTS.lighthouse * strength]);

@@ -157,7 +157,13 @@ const hashXY = (x: number, y: number, s: number) => hash(x, y, 300 + s);
 export function slotPoints(t: MapTemplate): [number, number][] {
   const S = t.slots;
   if (!S) return [];
-  return [...(S.npc ?? []), ...[S.lighthouse, S.workbench, S.chest, S.board, S.facility].filter((x): x is [number, number] => !!x)];
+  const out: [number, number][] = [];
+  for (const [k, v] of Object.entries(S)) {
+    if (!v) continue;
+    if (k === 'npc') out.push(...(v as [number, number][]));
+    else out.push(v as [number, number]);
+  }
+  return out;
 }
 
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {

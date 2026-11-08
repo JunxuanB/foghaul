@@ -12,7 +12,7 @@ import { nodesOn } from './forage';
 import { needsDone } from './inventory';
 import { m, type Msg } from './msg';
 import { roleOf } from './people';
-import type { Command, Facility, ForageNode, GameState, Person, Walk } from './types';
+import type { Command, Facility, ForageNode, GameState, Island, Person, Walk } from './types';
 import { findIsland } from './util';
 
 /** 当前所在岛的地图，并且人物在这张图上 */
@@ -49,6 +49,24 @@ export function peopleOn(state: GameState, islandId: string): Person[] {
   return state.people.filter((p) => p.loc.kind === 'island' && p.loc.id === islandId && !state.player.aboard.includes(p.id));
 }
 
+/** 村落、进出口局：有一位常驻的人（村长 / 办事员），站在第一个人的槽位上 */
+export function hostOf(isl: Island): string | null {
+  if (isl.kind === 'recipeVillage' || isl.kind === 'laborVillage') return 'elder';
+  if (isl.kind === 'bureau') return 'clerk';
+  return null;
+}
+
+/** 建设地基上还能建什么（床、仓库、停机坪；停机坪要飞机修好以后） */
+export function plotOptions(state: GameState, isl: Island): ('bed' | 'depot' | 'helipad')[] {
+  const all: ('bed' | 'depot' | 'helipad')[] = isl.kind === 'home' ? ['depot'] : ['bed', 'depot', 'helipad'];
+  return all.filter((w) => !isl.buildings[w] && (w !== 'helipad' || state.flags.planeRepaired));
+}
+
+/** 主岛的船坞：船坞村出现以后才有（以前用不上，不显示） */
+export function shipyardOpen(state: GameState): boolean {
+  return state.transport.rafts > 0 || !!findIsland(state, 'village3')?.discovered;
+}
+
 /** 跟着存档变的物体 */
 function stateObjects(state: GameState, islandId: string): WorldObj[] {
   const t = templateFor(islandId);
@@ -59,6 +77,15 @@ function stateObjects(state: GameState, islandId: string): WorldObj[] {
   // 木筏停在人所在的那座岛的码头边
   const L = layout(islandId, state.seed);
   if (state.player.hasRaft && state.player.at === islandId && L.raftAt) out.push(makeObj('raft@' + islandId, 'raft', L.raftAt[0], L.raftAt[1]));
+  // 主岛农田里的麦子（种下的是苗，熟了是麦穗）
+  if (isl.kind === 'home' && t?.field) {
+    const F = t.field;
+    state.flags.farm.forEach((p, i) => {
+      if (p === null || p === undefined) return;
+      const x = Math.round(F.x0 + ((i + 0.5) * (F.x1 - F.x0)) / state.flags.farm.length);
+      out.push(makeObj('crop@' + i, plotReadyAt(state, i) ? 'crop1' : 'crop0', x, F.y1 - 8));
+    });
+  }
   if (!S) return out;
   if (S.lighthouse) {
     const [x, y] = S.lighthouse;
@@ -66,8 +93,9 @@ function stateObjects(state: GameState, islandId: string): WorldObj[] {
   }
   if (S.npc) {
     const ppl = peopleOn(state, islandId);
-    // 村落和进出口局没有具体的人：放一位村民
-    const list = ppl.length ? ppl.map((p) => ({ id: p.id, ch: charOf(p) })) : isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau' ? [{ id: 'villager', ch: 'islander' }] : [];
+    // 村落和进出口局：第一个位置是村长 / 办事员，后面是岛上的人（来学东西的同伴、等着上船的原住民）
+    const host = hostOf(isl);
+    const list = [...(host ? [{ id: host, ch: host }] : []), ...ppl.map((p) => ({ id: p.id, ch: charOf(p) }))];
     list.slice(0, S.npc.length).forEach((p, i) => {
       const [x, y] = S.npc![i];
       out.push(makeObj('npc@' + p.id, `ch_${p.ch}_down_0`, x, y, 'npc', 'npc'));
@@ -78,7 +106,20 @@ function stateObjects(state: GameState, islandId: string): WorldObj[] {
   else if (isl.owned && S.facility && isl.kind === 'native') out.push(makeObj('facility@' + islandId, 'facilityBase', ...S.facility, 'facility', 'facilityBase'));
   if (isl.owned && S.chest) out.push(makeObj('chest@' + islandId, 'chest', ...S.chest));
   if (S.board) out.push(makeObj('board@' + islandId, 'board', ...S.board));
+  // 建设地基（还有能建的才显示）和建好的小屋、仓库棚、停机坪
+  if (isl.owned && S.plot && plotOptions(state, isl).length) out.push(makeObj('plot@' + islandId, 'plotSign', ...S.plot));
+  if (isl.kind !== 'home' && isl.buildings.bed && S.hut) out.push(makeObj('hut@' + islandId, 'hut', ...S.hut));
+  if (isl.buildings.depot && S.shed) out.push(makeObj('shed@' + islandId, 'shed', ...S.shed));
+  if (isl.kind !== 'home' && isl.buildings.helipad && S.pad) out.push(makeObj('pad@' + islandId, 'pad', ...S.pad));
+  if (S.school && isl.kind === 'recipeVillage') out.push(makeObj('school@' + islandId, 'school', ...S.school));
+  if (S.shipyard && shipyardOpen(state)) out.push(makeObj('shipyard@' + islandId, 'shipyard', ...S.shipyard));
+  if (S.office) out.push(makeObj('office@' + islandId, 'office', ...S.office));
   return out;
+}
+
+function plotReadyAt(state: GameState, i: number): boolean {
+  const t = state.flags.farm[i];
+  return t !== null && t !== undefined && state.time - t >= BALANCE.home.farm.growMinutes;
 }
 
 /** 设施建筑的精灵：按它生产或加工的东西画（config/buildings.ts 的 FACILITY_SPRITE） */
@@ -94,7 +135,10 @@ export function facilityName(f: Facility): Msg {
 /** 一座岛上的全部物体：模板里固定的 + 今天的采集点 + 跟着存档变的 */
 export function objectsOn(state: GameState, islandId: string): WorldObj[] {
   if (!templateFor(islandId)) return [];
-  return [...layout(islandId, state.seed).objects, ...nodesOn(state, islandId).map(nodeObject), ...stateObjects(state, islandId)];
+  let fixed = layout(islandId, state.seed).objects;
+  // 飞机修好以后，残骸换成直升机（停机坪：按 E 飞往别的停机坪）
+  if (state.flags.planeRepaired) fixed = fixed.map((o) => (o.kind === 'wreck' ? makeObj(o.id, 'plane', o.x, o.y) : o));
+  return [...fixed, ...nodesOn(state, islandId).map(nodeObject), ...stateObjects(state, islandId)];
 }
 
 export function objectById(state: GameState, islandId: string, id: string): WorldObj | undefined {
@@ -130,8 +174,11 @@ export function nearKind(state: GameState, kind: ObjKind): WorldObj | null {
   return best;
 }
 
+/** 只在特定地方才有的建筑：岛上没有这种建筑就不能做（不退回文字版规则） */
+const STRICT: ObjKind[] = ['workbench', 'school', 'shipyard', 'office', 'helipad'];
+
 /** 一条命令需要站在哪种物体旁边（没有要求时为 null） */
-export function objectFor(cmd: Command): ObjKind | null {
+export function objectFor(cmd: Command, state?: GameState): ObjKind | null {
   switch (cmd.t) {
     case 'gather':
       return cmd.what === 'shoreFish' ? 'shoal' : cmd.what === 'herb' ? 'herb' : 'tree';
@@ -151,13 +198,26 @@ export function objectFor(cmd: Command): ObjKind | null {
     case 'installPart':
     case 'repairPlane':
       return 'wreck';
-    case 'deliver':
-      return 'npc';
+    case 'deliver': {
+      // 村落的请求在请求板上交；救人、招募是和那个人说话
+      const isl = state ? findIsland(state, state.player.at) : undefined;
+      return isl && hostOf(isl) && isl.kind !== 'bureau' ? 'board' : 'npc';
+    }
+    case 'choose':
+      return 'board';
+    case 'learn':
+      return 'school';
     case 'build':
-      return cmd.what === 'lighthouse' ? 'lighthouse' : cmd.what === 'holdUpgrade' ? 'raft' : cmd.what === 'autoStore' ? 'facility' : null;
+      if (cmd.what === 'lighthouse') return 'lighthouse';
+      if (cmd.what === 'holdUpgrade') return 'raft';
+      if (cmd.what === 'autoStore') return 'facility';
+      return 'plot';
+    case 'train':
+      // 运输船员在船坞培训（主岛没有设施）；其他工作在设施旁
+      return cmd.job.kind === 'crew' ? 'shipyard' : 'facility';
     case 'upgradeIsland':
     case 'collect':
-    case 'train':
+    case 'wake':
       return 'facility';
     case 'fillCup':
       return 'chest';
@@ -165,6 +225,17 @@ export function objectFor(cmd: Command): ObjKind | null {
       return 'npc';
     case 'dropOff':
       return 'raft';
+    case 'buildTransportRaft':
+    case 'createRoute':
+    case 'updateRoute':
+    case 'deleteRoute':
+      return 'shipyard';
+    case 'report':
+    case 'export':
+    case 'buyUpgrade':
+      return 'office';
+    case 'fly':
+      return 'helipad';
     default:
       return null;
   }
@@ -172,16 +243,18 @@ export function objectFor(cmd: Command): ObjKind | null {
 
 /**
  * dispatch 内的位置校验：不在旁边时返回错误消息。
- * 岛上没有这种物体时（比如还没做“建设地基”的床），沿用文字版规则不校验；制作例外：没有工作台就不能做。
+ * 岛上没有这种物体时（比如还没建床的岛），沿用文字版规则不校验；
+ * 只在特定地方才有的建筑（工作台、学堂、船坞、进出口局、停机坪）例外：没有就不能做。
  */
 export function positionError(state: GameState, cmd: Command): Msg | null {
-  const kind = objectFor(cmd);
+  const kind = objectFor(cmd, state);
   if (!kind) return null;
-  if (kind === 'workbench' && !state.player.at) return m('err.needWorkbench');
+  const strict = STRICT.includes(kind) && cmd.t !== 'train';
+  if (strict && !state.player.at) return kind === 'workbench' ? m('err.needWorkbench') : m('err.notNear', { what: m('thing.' + kind) });
   const id = mapHere(state);
   if (!id) return null;
   const has = objectsOn(state, id).some((o) => o.kind === kind);
-  if (!has) return kind === 'workbench' ? m('err.needWorkbench') : null;
+  if (!has) return !strict ? null : kind === 'workbench' ? m('err.needWorkbench') : m('err.notNear', { what: m('thing.' + kind) });
   if (nearKind(state, kind)) return null;
   return m('err.notNear', { what: m('thing.' + kind) });
 }
@@ -198,7 +271,7 @@ export function approach(state: GameState, cmd: Command): void {
     }
     return;
   }
-  const kind = objectFor(cmd);
+  const kind = objectFor(cmd, state);
   if (!kind || !id) return;
   const o = objectsOn(state, id).find((x) => x.kind === kind && x.hit);
   if (!o || !o.hit) return;
@@ -211,6 +284,13 @@ export function placeAtDock(state: GameState, islandId: string): void {
   const L = templateFor(islandId) ? layout(islandId, state.seed) : null;
   const d = L?.dock;
   state.walk = { ...state.walk, island: islandId, x: d ? d.x + d.w / 2 : 0, y: d ? d.y + 8 : 0, facing: 'up' };
+}
+
+/** 人物站到某种物体前（飞到停机坪、试飞落地）；没有就站到码头 */
+export function placeAtKind(state: GameState, islandId: string, kind: ObjKind): void {
+  const o = templateFor(islandId) ? objectsOn(state, islandId).find((x) => x.kind === kind && x.hit) : undefined;
+  if (!o || !o.hit) return placeAtDock(state, islandId);
+  state.walk = { ...state.walk, island: islandId, x: o.hit.x + o.hit.w / 2, y: o.hit.y + o.hit.h + 6, facing: 'down' };
 }
 
 /** 人物站到某座岛的床（小屋门口）前 */
@@ -294,11 +374,23 @@ export function interactInfo(state: GameState, o: WorldObj): InteractInfo | null
       return { label: p ? m('act.talkTo', { who: p.name }) : m('act.talk'), ok: true };
     }
     case 'board':
-      return { label: m('act.board'), ok: false, reason: m('reason.nextStage') };
+      return { label: m('act.board'), ok: true };
+    case 'plot':
+      return { label: m('act.plot'), ok: true };
+    case 'school':
+      return { label: m('act.school'), ok: true };
+    case 'shipyard':
+      return { label: m('act.shipyard'), ok: true };
+    case 'office':
+      return { label: m('act.office'), ok: true };
+    case 'helipad':
+      return state.flags.flightDone ? { label: m('act.fly'), ok: true } : { label: m('act.fly'), ok: false, reason: m('reason.needFlight') };
     case 'raft':
       return { label: m('act.raft'), ok: true };
     case 'facility': {
       const isl = findIsland(state, state.player.at);
+      // 犯困的工人：按 E 直接叫醒（头顶冒着“Z”）
+      if (isl?.sleepy) return { label: m('act.wake'), ok: true };
       return { label: isl?.facility ? m('act.facility', { what: facilityName(isl.facility) }) : m('act.facilityBase'), ok: true };
     }
     default:

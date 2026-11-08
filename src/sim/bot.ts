@@ -233,7 +233,8 @@ export const STEPS: BotStep[] = [
     run: (s) => {
       villageRequest(s, 'dock');
       learnAt(s, 'dock', 'engineer', 'transportRaft');
-      sailTo(s, 'stoneIsle');
+      // 运输木筏在主岛的船坞造（工程师要在场）
+      sailTo(s, 'home');
       payable(s, { wood: 20 });
       must(s, { t: 'buildTransportRaft' });
       dropAt(s, 'engineer', 'stoneIsle');

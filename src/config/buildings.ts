@@ -16,6 +16,11 @@ export type ObjKind =
   | 'board'
   | 'raft'
   | 'facility'
+  | 'plot'
+  | 'school'
+  | 'shipyard'
+  | 'office'
+  | 'helipad'
   | 'decor';
 
 /** 相对底边中点的矩形：x、y 是左上角偏移 */
@@ -68,12 +73,42 @@ export const OBJ_DEFS: Record<string, ObjDef> = {
   facilityBase: { kind: 'facility', foot: { x: -12, y: -5, w: 24, h: 5 }, hit: { x: -16, y: -12, w: 32, h: 12 } },
   // 停在码头边的木筏：货舱装卸、改造（在水里，不挡路）
   raft: { kind: 'raft', hit: { x: -21, y: -22, w: 42, h: 22 } },
+  // M4 / M5：建设地基的木牌、建好的小屋（床）/ 仓库棚 / 停机坪、村落的学堂、主岛的船坞、进出口局、修好的直升机、麦子
+  plotSign: { kind: 'plot', foot: { x: -2, y: -4, w: 4, h: 4 }, hit: { x: -10, y: -8, w: 20, h: 8 } },
+  hut: { kind: 'bed', foot: { x: -21, y: -10, w: 42, h: 10 }, hit: { x: -6, y: -5, w: 12, h: 5 } },
+  house_d: { kind: 'decor', foot: { x: -38, y: -16, w: 76, h: 16 } },
+  hut_d: { kind: 'decor', foot: { x: -21, y: -10, w: 42, h: 10 } },
+  shed: { kind: 'decor', foot: { x: -17, y: -7, w: 34, h: 7 } },
+  pad: { kind: 'helipad', hit: { x: -18, y: -16, w: 36, h: 16 } },
+  school: { kind: 'school', foot: { x: -28, y: -12, w: 56, h: 12 }, hit: { x: -8, y: -5, w: 16, h: 5 } },
+  shipyard: { kind: 'shipyard', foot: { x: -34, y: -8, w: 68, h: 8 }, hit: { x: -36, y: -14, w: 72, h: 14 } },
+  office: { kind: 'office', foot: { x: -42, y: -14, w: 84, h: 14 }, hit: { x: -9, y: -5, w: 18, h: 5 } },
+  plane: { kind: 'helipad', foot: { x: -46, y: -16, w: 90, h: 14 }, hit: { x: -48, y: -18, w: 96, h: 18 } },
+  crop0: { kind: 'decor' },
+  crop1: { kind: 'decor' },
   tree_d: { kind: 'decor', foot: { x: -5, y: -6, w: 10, h: 6 } },
   stree_d: { kind: 'decor', foot: { x: -4, y: -5, w: 8, h: 5 } },
 };
 
 /** 每种互动对象的“初见介绍”和按键提示文字键：intro.<kind>、act.<kind> */
-export const INTERACTIVE: ObjKind[] = ['tree', 'shoal', 'herb', 'workbench', 'chest', 'bed', 'lighthouse', 'wreck', 'dock', 'farm', 'npc', 'board', 'raft', 'facility'];
+export const INTERACTIVE: ObjKind[] = ['tree', 'shoal', 'herb', 'workbench', 'chest', 'bed', 'lighthouse', 'wreck', 'dock', 'farm', 'npc', 'board', 'raft', 'facility', 'plot', 'school', 'shipyard', 'office', 'helipad'];
+
+/** 模板槽位 → 放在这里的精灵（槽位上的东西跟着存档出现，见 sim/interact.ts 的 stateObjects） */
+export const SLOT_SPRITE: Record<string, string> = {
+  npc: 'npc',
+  lighthouse: 'light',
+  workbench: 'workbench',
+  chest: 'chest',
+  board: 'board',
+  facility: 'facility',
+  plot: 'plotSign',
+  hut: 'hut',
+  shed: 'shed',
+  pad: 'pad',
+  school: 'school',
+  shipyard: 'shipyard',
+  office: 'office',
+};
 
 /** 设施建筑的样子：产物或配方 id → 精灵名（docs/2d-design.md 第 6 节“设施建筑的样子”） */
 export const FACILITY_SPRITE: Record<string, string> = {

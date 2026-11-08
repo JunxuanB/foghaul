@@ -24,7 +24,7 @@ import {
 import { canEnter, lightCircle, lightCorridor, look } from './map';
 import { checkReveals, lightFrom } from './reveal';
 import { updateUnlocks } from './tutorial';
-import { mapHere, nearNode, nearWater, placeAtDock, positionError } from './interact';
+import { mapHere, nearNode, nearWater, placeAtDock, placeAtKind, positionError } from './interact';
 import { launchPoint } from '../world/sea';
 import { fail, OK, say } from './log';
 import { islandM, itemM, m, recipeM, roleM, stockP, type Msg } from './msg';
@@ -761,6 +761,7 @@ function endCutscene(state: GameState): Result {
     state.player.x = b.x;
     state.player.y = b.y;
     state.player.at = b.id;
+    placeAtKind(state, b.id, 'helipad');
     look(state);
     say(state, 'island.bureau.intro');
     say(state, 'log.reportHint', 'hint');
@@ -815,6 +816,7 @@ function fly(state: GameState, to: string): Result {
   state.player.x = dest.x;
   state.player.y = dest.y;
   state.player.at = dest.id;
+  placeAtKind(state, dest.id, 'helipad');
   look(state);
   say(state, 'log.flew', { isl: islandM(dest.id) });
   advance(state, A.flyMinutes);

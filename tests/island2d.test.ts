@@ -1,13 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { FEET, canStand, forageSpots, layout, raster, rectDist, T, TILE } from '../src/world/island';
-import { OBJ_DEFS } from '../src/config/buildings';
+import { OBJ_DEFS, SLOT_SPRITE } from '../src/config/buildings';
+import type { MapTemplate } from '../src/config/maps';
 import { ISLANDS } from '../src/config/world';
 import { BALANCE } from '../src/config/balance';
 
-/** 从出生点按 2 像素一步做洪水填充，返回能站到的点 */
+type R4 = { x: number; y: number; w: number; h: number };
+/** 槽位上的建筑（全部建好时）：底座挡路、互动范围 */
+function slotObjects(t: MapTemplate): { id: string; foot: R4 | null; hit: R4 }[] {
+  const out: { id: string; foot: R4 | null; hit: R4 }[] = [];
+  for (const [k, v] of Object.entries(t.slots ?? {})) {
+    if (!v) continue;
+    const pts = (k === 'npc' ? v : [v]) as [number, number][];
+    const def = OBJ_DEFS[SLOT_SPRITE[k]];
+    pts.forEach(([x, y], i) => {
+      const f = def?.foot;
+      const h = def?.hit ?? f ?? { x: -10, y: -10, w: 20, h: 10 };
+      out.push({ id: k + i, foot: f ? { x: x + f.x, y: y + f.y, w: f.w, h: f.h } : null, hit: { x: x + h.x, y: y + h.y, w: h.w, h: h.h } });
+    });
+  }
+  return out;
+}
+
+/** 从出生点按 2 像素一步做洪水填充，返回能站到的点（槽位上的建筑全部建好、都挡路） */
 function reachable(id: string, seed: number) {
   const L = layout(id, seed);
   const R = raster(id, seed);
+  const feet = slotObjects(L.template).map((o) => o.foot).filter((f): f is R4 => !!f);
+  const stand = (x: number, y: number) => canStand(R, x, y) && !feet.some((f) => x + FEET.x < f.x + f.w && x + FEET.x + FEET.w > f.x && y + FEET.y < f.y + f.h && y > f.y);
   const S = 2;
   const W = Math.ceil(R.w / S);
   const H = Math.ceil(R.h / S);
@@ -27,7 +47,7 @@ function reachable(id: string, seed: number) {
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const j = ny * W + nx;
       if (seen[j]) continue;
-      if (!canStand(R, nx * S + 1, ny * S + 1)) continue;
+      if (!stand(nx * S + 1, ny * S + 1)) continue;
       seen[j] = 1;
       q.push(j);
     }
@@ -44,8 +64,8 @@ describe('every island has a walkable map', () => {
       expect(canStand(R, ...L.spawn)).toBe(true);
       const reach = BALANCE.interact.reach;
       const t = L.template;
-      const slotPts: [number, number][] = [...(t.slots?.npc ?? []), ...[t.slots?.lighthouse, t.slots?.workbench, t.slots?.chest, t.slots?.board, t.slots?.facility].filter((x): x is [number, number] => !!x)];
-      const targets = [...L.objects.filter((o) => o.kind !== 'decor' && o.hit).map((o) => ({ id: o.id, r: o.hit! })), ...slotPts.map(([x, y], i) => ({ id: 'slot' + i, r: { x: x - 10, y: y - 10, w: 20, h: 10 } }))];
+      const slotPts: [number, number][] = Object.entries(t.slots ?? {}).flatMap(([k, v]) => (k === 'npc' ? (v as [number, number][]) : [v as [number, number]]));
+      const targets = [...L.objects.filter((o) => o.kind !== 'decor' && o.hit).map((o) => ({ id: o.id, r: o.hit! })), ...slotObjects(t).map((o) => ({ id: o.id, r: o.hit }))];
       for (const o of targets) {
         let ok = false;
         for (let i = 0; i < seen.length && !ok; i++) {
@@ -70,8 +90,8 @@ describe('home island map', () => {
       // 同一种子结果一致
       expect(layout('home', seed)).toBe(L);
       const reach = BALANCE.interact.reach;
-      for (const o of L.objects) {
-        if (o.kind === 'decor' || !o.hit) continue;
+      for (const o of [...L.objects, ...slotObjects(L.template)]) {
+        if (('kind' in o && o.kind === 'decor') || !o.hit) continue;
         let ok = false;
         for (let i = 0; i < seen.length && !ok; i++) {
           if (!seen[i]) continue;

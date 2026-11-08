@@ -70,8 +70,13 @@ export abstract class WorldScene extends Phaser.Scene {
     this.ctx.view.set({ intro: null, prompts: [], focus: null, action: null, labels: [] });
     this.ctx.view.s.anchors.edge = null;
     this.off = onAction((a) => this.onAction(a));
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off?.());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.off?.());
+    const offFx = this.ctx.store.onFx((e) => this.onFx(e));
+    const done = () => {
+      this.off?.();
+      offFx();
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, done);
+    this.events.once(Phaser.Scenes.Events.DESTROY, done);
   }
 
   /** 子类在 create() 末尾调用：所有纹理按最近邻采样（像素画放大、移动时不糊） */
@@ -105,6 +110,9 @@ export abstract class WorldScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 按键
 
   protected abstract onAction(a: Action): void;
+
+  /** 规则层的大事（救人、升级、修好飞机……）：子类放庆祝的粒子 */
+  protected onFx(_e: string): void {}
 
   /** 全局面板键（两个场景一样）。处理了返回 true */
   protected panelAction(a: Action): boolean {

@@ -40,6 +40,12 @@ registerMod({
 
 `registerMod` 必须在游戏开始之前调用（精灵在 Boot 场景里烘焙，地图在第一次用到时生成并缓存）。
 
+### M4 / M5 加的表
+
+- **音效**：`config/audio.ts` 的 `SOUNDS`（合成参数，没有音频文件）和 `CMD_SOUND`（命令 → 音效）。MOD 以后可以按 id 加音效、给自己的命令配音效。
+- **槽位 → 建筑**：`config/buildings.ts` 的 `SLOT_SPRITE`。新的建筑种类：`plot`、`school`、`shipyard`、`office`、`helipad`；地图模板的新槽位 `plot`、`hut`、`shed`、`pad`、`school`、`shipyard`、`office`。
+- **每座岛的专门地图**都在 `config/maps.ts` 的 `MAPS`；MOD 加的岛没有专门地图时按种类用 `GENERIC_MAPS`。
+
 ## 还不能做的（以后开放 MOD 前要做）
 
 - **物品、配方、岛屿、村落请求**现在是 TypeScript 的联合类型和常量表（`ItemId`、`RecipeId`、`ISLANDS`），MOD 加不进去。要开放这部分，需要把它们改成按字符串 id 注册的表，并给存档加迁移。

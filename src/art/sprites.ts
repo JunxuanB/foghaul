@@ -631,6 +631,9 @@ export const CHARS: Record<string, CharDef> = {
   doctor: { hat: 'none', hair: 1, shirt: [7, 6, 5], coat: true, cross: 9, pants: [2, 1], prop: ['bag'] },
   pilot: { hat: 'cap', hatC: [8, 1], goggles: [5, 4], hair: 8, shirt: [9, 8, 1], scarf: 7, pants: [2, 1], prop: ['scarftail'] },
   islander: { hat: 'none', hair: 0, shirt: [5, 4, 3], pants: [2, 1] },
+  // 村长（村落的请求板旁）、进出口局的办事员
+  elder: { hat: 'none', hair: 7, beard: 7, shirt: [10, 9, 8], coat: true, pants: [1, 0], prop: ['bag'] },
+  clerk: { hat: 'cap', hatC: [3, 2], hair: 1, shirt: [7, 6, 5], coat: true, pants: [2, 1] },
 };
 
 /** 人物：24 × 32，身体 16 × 26 居中；f 为帧 0–3；pose 为伐木动作 up / down */
@@ -1016,5 +1019,279 @@ export function spSaltPan(): G {
   g.rect(3, 7, 26, 1, 'g2');
   g.ellS(24, 6, 4, 2.5, 'n', { hi: 2 });
   g.ellS(8, 6, 3, 2, 'n', { hi: 2 });
+  return g.outline();
+}
+
+// ---------------------------------------------------------------- M4 / M5 的建筑
+
+/** 网络岛上建的小屋（床）：木墙、草顶、一扇门、一扇窗 */
+export function spHut(): G {
+  const g = new G(48, 44);
+  g.ell(24, 41, 22, 2.6, 'z');
+  // 墙
+  for (let y = 20; y < 40; y++)
+    for (let x = 5; x < 43; x++) {
+      const r = (y - 20) % 4;
+      let i = r === 0 ? 3 : r === 3 ? 1 : 2;
+      if (x >= 37) i = Math.max(0, i - 1);
+      if (y < 23) i = Math.max(0, i - 2);
+      g.set(x, y, 'w' + i);
+    }
+  // 草顶
+  for (let y = 2; y < 22; y++) {
+    const t = (y - 2) / 20, x0 = Math.round(18 - t * 16), x1 = Math.round(30 + t * 16);
+    for (let x = x0; x < x1; x++) g.set(x, y, (y + (x % 3)) % 4 === 0 ? 'q0' : x > x1 - 4 ? 'q0' : 'q' + (y % 3 === 0 ? 2 : 1));
+  }
+  g.rect(1, 21, 46, 1, 'q0');
+  // 门
+  g.rect(20, 27, 9, 13, 'w0');
+  g.rect(21, 28, 7, 12, 'w1');
+  g.set(26, 34, 'y0');
+  // 窗
+  g.rect(9, 26, 8, 6, 'w0');
+  g.rect(10, 27, 6, 4, 'g1');
+  g.set(10, 27, 'g2');
+  g.meta = { win: [[10, 27, 6, 4]], door: [24, 39] };
+  return g.outline();
+}
+
+/** 仓库棚：四根柱子撑着斜顶，下面堆着箱子和桶 */
+export function spShed(): G {
+  const g = new G(38, 30);
+  g.ell(19, 27.5, 17, 2.2, 'z');
+  g.cyl(3, 8, 2, 19, 'w', [1, 0]);
+  g.cyl(33, 8, 2, 19, 'w', [1, 0]);
+  for (let y = 2; y < 9; y++) g.rect(1, y, 36, 1, y % 2 ? 'r2' : 'r1');
+  g.rect(1, 8, 36, 1, 'r0');
+  // 箱子和桶
+  g.rect(7, 17, 9, 9, 'w2');
+  g.rect(7, 17, 9, 1, 'w3');
+  g.line(7, 17, 15, 25, 'w1');
+  g.rect(16, 20, 7, 6, 'w2');
+  g.rect(16, 20, 7, 1, 'w3');
+  g.ellS(28, 22, 4, 4.5, 'w');
+  g.rect(24, 21, 8, 1, 'm1');
+  return g.outline();
+}
+
+/** 停机坪：一块平整的石台，中间一个白色的 H */
+export function spPad(): G {
+  const g = new G(46, 20);
+  g.ellS(23, 10, 21, 8.5, 's', { lo: 1, hi: 2 });
+  g.ell(23, 10, 17, 6.5, 's2');
+  g.rect(16, 6, 2, 8, 'n2');
+  g.rect(28, 6, 2, 8, 'n2');
+  g.rect(16, 9, 14, 2, 'n2');
+  return g.outline();
+}
+
+/** 建设地基的木牌：插在一小块平地上，牌子上画着锤子 */
+export function spPlotSign(): G {
+  const g = new G(24, 20);
+  g.ell(12, 17.5, 10, 2, 'z');
+  g.ellS(12, 16, 10, 2.5, 'sa', { lo: 1 });
+  for (const x of [2, 21]) g.cyl(x, 12, 1, 5, 'w', [1]);
+  g.line(2, 13, 21, 13, 'q0');
+  g.cyl(11, 7, 2, 9, 'w', [1, 0]);
+  g.rect(5, 1, 14, 7, 'w2');
+  g.rect(5, 1, 14, 1, 'w3');
+  g.rect(5, 7, 14, 1, 'w0');
+  // 锤子
+  g.rect(9, 3, 5, 2, 'm1');
+  g.rect(11, 5, 1, 2, 'w0');
+  return g.outline();
+}
+
+/** 学堂：白墙小楼，屋顶上挂着一口铜钟，门边一块黑板 */
+export function spSchool(): G {
+  const g = new G(64, 58);
+  g.ell(32, 55, 30, 3, 'z');
+  for (let y = 26; y < 54; y++)
+    for (let x = 6; x < 58; x++) {
+      let i = (y - 26) % 6 === 5 ? 1 : 2;
+      if (x >= 50) i = 1;
+      if (y < 29) i = 0;
+      g.set(x, y, 'c' + i);
+    }
+  // 屋顶
+  for (let y = 10; y < 28; y++) {
+    const t = (y - 10) / 18, x0 = Math.round(22 - t * 19), x1 = Math.round(42 + t * 19);
+    for (let x = x0; x < x1; x++) g.set(x, y, (y - 10) % 4 === 3 ? 'r0' : x > x1 - 4 ? 'r1' : 'r2');
+  }
+  g.rect(2, 27, 60, 1, 'r0');
+  // 钟楼
+  g.rect(27, 0, 10, 11, 'w1');
+  g.rect(28, 2, 8, 7, 'w0');
+  g.ellS(32, 6, 3, 3, 'x', { lo: 1, hi: 2 });
+  g.set(32, 9, 'x2');
+  g.rect(25, 0, 14, 1, 'r1');
+  // 门
+  g.rect(26, 38, 12, 16, 'w0');
+  g.rect(27, 39, 10, 15, 'w2');
+  g.rect(31, 39, 1, 15, 'w1');
+  g.set(30, 46, 'y0');
+  g.set(33, 46, 'y0');
+  // 窗
+  for (const wx of [10, 44]) {
+    g.rect(wx, 34, 10, 9, 'w0');
+    g.rect(wx + 1, 35, 8, 7, 'g1');
+    g.rect(wx + 5, 35, 1, 7, 'w0');
+    g.set(wx + 1, 35, 'g2');
+  }
+  // 黑板
+  g.rect(16, 46, 8, 6, 'w1');
+  g.rect(17, 47, 6, 4, 'a0');
+  g.line(18, 48, 21, 48, 'n2');
+  g.line(18, 50, 20, 50, 'n1');
+  g.meta = { win: [[11, 35, 8, 7], [45, 35, 8, 7]], door: [32, 53] };
+  return g.outline();
+}
+
+/** 船坞：伸进水里的木滑道，上面一副木筏的骨架，旁边一根吊杆 */
+export function spShipyard(): G {
+  const g = new G(72, 40);
+  g.ell(36, 37, 34, 2.6, 'z');
+  // 滑道（两条长木）
+  for (const y of [22, 32]) {
+    g.rect(2, y, 68, 3, 'w2');
+    g.rect(2, y, 68, 1, 'w3');
+    g.rect(2, y + 2, 68, 1, 'w0');
+  }
+  for (let x = 4; x < 70; x += 8) g.rect(x, 25, 3, 7, 'w1');
+  // 木筏骨架
+  for (let x = 18; x < 52; x += 5) {
+    g.rect(x, 16, 3, 12, 'w2');
+    g.set(x, 16, 'w3');
+  }
+  g.rect(16, 18, 38, 2, 'w1');
+  g.rect(16, 24, 38, 2, 'w1');
+  // 吊杆
+  g.cyl(60, 2, 3, 22, 'w', [2, 1, 0]);
+  g.line(61, 3, 44, 6, 'w1');
+  g.line(46, 6, 46, 14, 'q0');
+  g.rect(44, 14, 4, 3, 'm1');
+  // 绳圈和工具
+  g.ellS(8, 18, 4, 2.5, 'q', { lo: 0, hi: 1 });
+  g.rect(64, 26, 5, 4, 'w2');
+  return g.outline();
+}
+
+/** 进出口局：两层石楼，正中大门，屋顶上一面旗 */
+export function spOffice(): G {
+  const g = new G(92, 76);
+  g.ell(46, 73, 44, 3.4, 'z');
+  for (let y = 22; y < 72; y++)
+    for (let x = 6; x < 86; x++) {
+      const row = Math.floor((y - 22) / 4), off = row % 2 ? 5 : 0, mort = (y - 22) % 4 === 3 || (x + off) % 10 === 0;
+      let i = mort ? 1 : x > 78 ? 2 : 3;
+      if (y < 26) i = Math.max(0, i - 2);
+      g.set(x, y, 's' + i);
+    }
+  // 屋顶
+  for (let y = 8; y < 24; y++) {
+    const t = (y - 8) / 16, x0 = Math.round(14 - t * 12), x1 = Math.round(78 + t * 12);
+    for (let x = x0; x < x1; x++) g.set(x, y, (y - 8) % 4 === 3 ? 'r0' : x > x1 - 4 ? 'r1' : 'r2');
+  }
+  g.rect(1, 23, 90, 2, 'r0');
+  // 旗
+  g.cyl(45, 0, 2, 10, 'm', [2, 1]);
+  g.rect(47, 1, 10, 6, 'e2');
+  g.rect(47, 1, 10, 1, 'e3');
+  g.rect(49, 3, 5, 2, 'x1');
+  // 两层窗
+  for (const wy of [30, 48])
+    for (const wx of [12, 26, 58, 72]) {
+      g.rect(wx, wy, 9, 10, 's0');
+      g.rect(wx + 1, wy + 1, 7, 8, 'g1');
+      g.rect(wx + 4, wy + 1, 1, 8, 's0');
+      g.set(wx + 1, wy + 1, 'g2');
+    }
+  // 大门和台阶
+  g.rect(38, 46, 16, 26, 's0');
+  g.rect(39, 47, 14, 25, 'w1');
+  g.rect(45, 47, 1, 25, 'w0');
+  g.set(43, 59, 'y0');
+  g.set(48, 59, 'y0');
+  g.rect(36, 70, 20, 2, 's2');
+  g.rect(36, 70, 20, 1, 's3');
+  // 门牌
+  g.rect(40, 40, 12, 4, 'x1');
+  g.rect(40, 40, 12, 1, 'x2');
+  g.meta = { win: [[13, 31, 7, 8], [27, 31, 7, 8], [59, 31, 7, 8], [73, 31, 7, 8], [13, 49, 7, 8], [73, 49, 7, 8]], door: [46, 71] };
+  return g.outline();
+}
+
+/** 修好的直升机：停在主岛残骸的位置 */
+export function spPlane(): G {
+  const g = new G(112, 56);
+  g.ell(54, 51, 46, 3.6, 'z');
+  // 起落架
+  g.rect(26, 46, 50, 2, 'm1');
+  g.rect(26, 46, 50, 1, 'm2');
+  for (const x of [34, 64]) g.rect(x, 40, 2, 7, 'm0');
+  // 机身
+  g.ellS(48, 30, 28, 13, 'm', { lo: 1 });
+  g.rect(20, 34, 56, 2, 'x1');
+  // 驾驶舱玻璃
+  g.ellS(30, 27, 10, 8, 'g', { lo: 1, hi: 2 });
+  g.line(26, 22, 34, 32, 'g2');
+  // 门
+  g.rect(50, 22, 12, 16, 'm0');
+  g.rect(51, 23, 10, 14, 'm2');
+  g.set(59, 31, 'm0');
+  // 尾梁和尾桨
+  for (let x = 74; x <= 100; x++) {
+    const t = (x - 74) / 26, top = Math.round(26 - t * 4);
+    for (let y = top; y < top + 4 - Math.round(t * 2); y++) g.set(x, y, 'm' + (y === top ? 3 : 2));
+  }
+  g.ellS(102, 20, 5, 5, 'm', { lo: 0, hi: 1 });
+  g.line(97, 15, 107, 25, 'm0');
+  g.line(107, 15, 97, 25, 'm0');
+  // 主旋翼
+  g.rect(44, 14, 8, 4, 'm0');
+  g.rect(6, 12, 92, 2, 'm1');
+  g.rect(6, 12, 92, 1, 'm3');
+  return g.outline();
+}
+
+/** 农田里的麦子：0 刚种下的苗，1 长成的麦穗 */
+export function spCrop(stage: 0 | 1): G {
+  const g = new G(20, 14);
+  for (let r = 0; r < 2; r++)
+    for (let x = 2; x < 19; x += 4) {
+      const by = 8 + r * 4;
+      if (stage === 0) {
+        g.set(x, by, 'l2');
+        g.set(x - 1, by - 1, 'l1');
+        g.set(x + 1, by - 1, 'l2');
+      } else {
+        g.line(x, by, x, by - 6, 'q0');
+        g.set(x, by - 7, 'q2');
+        g.set(x - 1, by - 6, 'q1');
+        g.set(x + 1, by - 6, 'q2');
+        g.set(x, by - 5, 'q1');
+      }
+    }
+  return g.outline();
+}
+
+/** 海上的运输木筏：比自己的木筏宽，甲板上堆着货箱 */
+export function spMiniCargoRaft(loaded: boolean): G {
+  const g = new G(18, 14);
+  for (let i = 0; i < 5; i++) {
+    g.rect(1 + i * 3, 8, 3, 4, 'w2');
+    g.set(3 + i * 3, 8, 'w1');
+  }
+  g.rect(1, 11, 15, 1, 'w0');
+  g.rect(12, 1, 1, 8, 'w1');
+  for (let y = 2; y < 7; y++) g.rect(13, y, Math.max(1, Math.round((y - 1) * 0.6)), 1, 'e2');
+  // 船员
+  g.rect(9, 4, 2, 1, 'i5');
+  g.rect(9, 5, 2, 3, 'i4');
+  if (loaded) {
+    g.rect(2, 5, 5, 3, 'w3');
+    g.rect(2, 5, 5, 1, 'x1');
+    g.line(2, 5, 6, 7, 'w1');
+  }
   return g.outline();
 }

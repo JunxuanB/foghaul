@@ -53,7 +53,8 @@ try {
   const s2 = await st();
   if ((s2.player.pack.wood ?? 0) < 8) throw new Error('掰树枝没有得到木头：' + JSON.stringify(s2.player.pack));
   await page.evaluate(() => Object.assign(window.foghaul.state.walk, { x: 424, y: 226, facing: 'up' }));
-  await page.waitForTimeout(200);
+  // 等画面层选中工作台再按 E（慢的机器上一帧可能要很久）
+  await page.waitForFunction(() => window.foghaulView.s.focus?.kind === 'workbench');
   await page.keyboard.press('KeyE');
   await page.getByRole('button', { name: '制作' }).first().click();
   await page.keyboard.press('Escape');

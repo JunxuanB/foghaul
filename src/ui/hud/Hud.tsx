@@ -6,7 +6,7 @@ import { BALANCE } from '../../config/balance';
 import { ITEMS } from '../../config/items';
 import { t, tm } from '../../i18n';
 import { dayOf, minuteOfDay } from '../../sim/clock';
-import { currentGuide } from '../../sim/guide';
+import { currentGuide, pointerStep } from '../../sim/guide';
 import { objectives } from '../../sim/objectives';
 import { activeTip, has } from '../../sim/tutorial';
 import { towardsMsg } from '../../sim/hints';
@@ -130,7 +130,7 @@ function Goal() {
 function Towards() {
   const g = useGame();
   if (g.player.at) return null;
-  const step = currentGuide(g);
+  const step = pointerStep(g);
   const id = (step?.target.kind === 'island' ? step.target.id : step?.at) ?? g.player.target;
   const isl = id ? g.islands.find((i) => i.id === id && i.revealed) : undefined;
   if (!isl) return null;

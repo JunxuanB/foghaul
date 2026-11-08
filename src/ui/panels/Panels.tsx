@@ -1,15 +1,16 @@
 // 每个面板对应一个建筑或一个全局键（docs/2d-design.md 第 9 节“面板清单”）。
 // 外框都是 Panel（大小固定），内容用 Views 的模板和 Kit 的零件拼，不写说明句子。
-import { useState } from 'react';
-import { iconURL, spriteURL } from '../../art/draw';
+import { useEffect, useRef, useState } from 'react';
+import { getVolume, play, setVolume } from '../../audio/sfx';
+import { spriteURL } from '../../art/draw';
 import { BALANCE } from '../../config/balance';
-import { PART_IDS, type ItemId } from '../../config/items';
+import type { ItemId } from '../../config/items';
 import { RECIPES, RECIPE_ORDER, type RecipeId } from '../../config/recipes';
 import { LANGS, t, tm } from '../../i18n';
 import { canUseStock, craftBlock, here } from '../../sim/actions';
 import { dryStock, slotsUsed, stockSlots } from '../../sim/inventory';
 import { useGame, useStore, useView, useViewStore } from '../../store/hooks';
-import { Card, Cell, Chip, CostGrid, Icon, Key, label, Picture, Portrait, reasonText, Yield } from '../components/Kit';
+import { Cell, Chip, CostGrid, Icon, Key, label, Portrait, reasonText, Yield } from '../components/Kit';
 import { charOf } from '../../sim/interact';
 import { canDo, isHungry, jobMsg, personLabel } from '../../sim/people';
 import type { Job, Person } from '../../sim/types';
@@ -18,6 +19,8 @@ import { useUi } from '../ui';
 import { FacilityPanel, RaftPanel } from './IslandPanels';
 import { Panel } from './Panel';
 import { LighthousePanel, MapPanel, TalkPanel } from './SeaPanels';
+import { BoardPanel, FarmPanel, PlotPanel, SchoolPanel, ShipyardPanel } from './NetPanels';
+import { HelipadPanel, OfficePanel, WreckPanel } from './EndPanels';
 import { Column, FocusActions, FocusStatus, PackHoldBody, SlotGrid, TankStrip, useFocus } from './Views';
 
 const P = BALANCE.inventory;
@@ -188,40 +191,6 @@ export function ChestPanel() {
 }
 
 /** 维修（直升机残骸）：零件格：装好的打勾，背包里有的亮，缺的暗 */
-export function WreckPanel() {
-  const g = useGame();
-  return (
-    <Panel title={t('thing.wreck')} icon="partRotor" status={<span className="u-dim">{t('ui.repairSoon')}</span>}>
-      <div className="v-building">
-        <Picture sprite="wreck" />
-        <div className="v-stack">
-          <Card title={t('ui.parts')} icon="partGear">
-            <span className="k-cells">
-              {PART_IDS.map((id) => {
-                const done = g.flags.partsInstalled.includes(id);
-                const have = (g.player.pack[id] ?? 0) > 0;
-                return <CellPart key={id} id={id} state={done ? 'done' : have ? 'have' : 'missing'} />;
-              })}
-            </span>
-          </Card>
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
-function CellPart({ id, state }: { id: ItemId; state: 'done' | 'have' | 'missing' }) {
-  return (
-    <span className={'k-cell' + (state === 'missing' ? ' dim' : '')} title={t('item.' + id)}>
-      <span className="k-box">
-        <Icon id={id} />
-        {state === 'done' && <img className="k-tick" src={iconURL('ui_check')} alt="" />}
-      </span>
-      <span className="k-num">{t(state === 'done' ? 'ui.installed' : state === 'have' ? 'ui.inPack' : 'ui.partMissing')}</span>
-    </span>
-  );
-}
-
 /** 日志（J）：日志是剧情文字，可以有强调色 */
 export function JournalPanel() {
   const g = useGame();
@@ -289,7 +258,7 @@ const KEYS: [string, string][] = [
   ['Z', 'ui.keyDrink'],
   ['F', 'ui.keyCrate'],
 ];
-const HELP = ['goal', 'time', 'craft', 'bags'];
+const HELP = ['goal', 'time', 'craft', 'bags', 'world'];
 
 /** 帮助（H）：按键一页画成键帽，规则一页是文字（帮助本来就是给人读的） */
 export function HelpPanel() {
@@ -351,6 +320,7 @@ export function MenuPanel() {
         <button className="u-btn sec" onClick={() => vs.set({ panel: 'help' })}>
           {t('ui.help')}
         </button>
+        <VolumeRow />
         <div className="seg">
           <span className="u-label">{t('ui.language')}</span>
           {LANGS.map((l) => (
@@ -374,8 +344,42 @@ export function MenuPanel() {
   );
 }
 
+const VOL_KEYS = ['ui.vol0', 'ui.vol1', 'ui.vol2', 'ui.vol3'];
+
+/** 音量：静音、小、中、大（每个玩家自己的偏好，存在浏览器里） */
+function VolumeRow() {
+  const [v, setV] = useState(getVolume());
+  const steps = [0, 0.3, 0.6, 1];
+  return (
+    <div className="seg">
+      <span className="u-label">{t('ui.volume')}</span>
+      {steps.map((x, i) => (
+        <button
+          key={x}
+          className={'u-btn' + (Math.abs(v - x) < 0.05 ? '' : ' sec')}
+          aria-pressed={Math.abs(v - x) < 0.05}
+          onClick={() => {
+            setVolume(x);
+            setV(x);
+            play('pickup');
+          }}
+        >
+          {t(VOL_KEYS[i])}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function PanelHost() {
   const v = useView();
+  // 开关面板的一声轻响
+  const was = useRef(v.panel);
+  useEffect(() => {
+    if (was.current === v.panel) return;
+    play(v.panel ? 'open' : 'close');
+    was.current = v.panel;
+  }, [v.panel]);
   switch (v.panel) {
     case 'inventory':
       return <InventoryPanel />;
@@ -403,6 +407,20 @@ export function PanelHost() {
       return <MenuPanel />;
     case 'people':
       return <PeoplePanel />;
+    case 'board':
+      return <BoardPanel />;
+    case 'school':
+      return <SchoolPanel />;
+    case 'shipyard':
+      return <ShipyardPanel />;
+    case 'plot':
+      return <PlotPanel />;
+    case 'farm':
+      return <FarmPanel />;
+    case 'office':
+      return <OfficePanel />;
+    case 'helipad':
+      return <HelipadPanel />;
     default:
       return null;
   }

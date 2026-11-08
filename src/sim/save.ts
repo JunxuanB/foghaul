@@ -2,11 +2,12 @@ import { BALANCE } from '../config/balance';
 import type { GameState } from './types';
 import { initForage } from './forage';
 
-/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点。v3：木筏在海面上的位置、最近一次战斗。v4：每座岛都有树和草药。v5：设施暂存箱、昨日收成（仓库改成格子，旧档多出来的东西保留，只是放不进新的）。v6：自动入库机、加入卡片、倒下卡片 */
-export const SAVE_VERSION = 6;
+/** 2D 版从 1 重新开始，不读文字版存档。v2：树和草药改成可刷新的采集点。v3：木筏在海面上的位置、最近一次战斗。v4：每座岛都有树和草药。v5：设施暂存箱、昨日收成（仓库改成格子，旧档多出来的东西保留，只是放不进新的）。v6：自动入库机、加入卡片、倒下卡片。v7：B、C、D 段的岛和主岛的新地图（建设地基、船坞），重新长树和草药 */
+export const SAVE_VERSION = 7;
 
 /** v6 起有专门地图的岛（旧档里这些岛的树和草药按通用地图长的，要重新长） */
 const NEW_MAPS_V6 = ['stoneIsle', 'forestIsle', 'nativeA', 'fisherIsle'];
+/** v7 起有专门地图（或加了建设地基、船坞槽位）的岛：所有岛都按新地图重新长 */
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -63,6 +64,13 @@ function migrate(s: GameState): GameState | null {
     for (const id of NEW_MAPS_V6) delete s.forage[id];
     initForage(s);
     s.version = 6;
+  }
+  // v6 → v7：每座岛都有专门地图了，主岛和 A 段的岛多了建设地基、仓库棚、停机坪、船坞的位置（树不能长在上面）。
+  // 结构没变，只按新地图重新长树和草药
+  if (s.version === 6) {
+    s.forage = {};
+    initForage(s);
+    s.version = 7;
   }
   if (s.version === SAVE_VERSION) return s;
   return null;

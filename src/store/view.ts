@@ -4,7 +4,7 @@ import type { ObjKind } from '../config/buildings';
 import type { ItemId } from '../config/items';
 import type { Msg } from '../sim/msg';
 
-export type PanelId = 'inventory' | 'craft' | 'chest' | 'lighthouse' | 'wreck' | 'journal' | 'help' | 'menu' | 'map' | 'talk' | 'raft' | 'facility' | 'people';
+export type PanelId = 'inventory' | 'craft' | 'chest' | 'lighthouse' | 'wreck' | 'journal' | 'help' | 'menu' | 'map' | 'talk' | 'raft' | 'facility' | 'people' | 'board' | 'school' | 'shipyard' | 'plot' | 'office' | 'helipad' | 'farm';
 
 /** 打开时暂停时间的面板（菜单、帮助） */
 export const PAUSING_PANELS: PanelId[] = ['menu', 'help'];

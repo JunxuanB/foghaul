@@ -11,6 +11,9 @@ import { ReportPopup } from './popups/ReportPopup';
 import { JoinedPopup } from './popups/JoinedPopup';
 import { DeathPopup } from './popups/DeathPopup';
 import { DevPanel } from './DevPanel';
+import { unlockAudio } from '../audio/sfx';
+import { isTouch, TouchControls } from './hud/Touch';
+import { CutscenePopup } from './panels/EndPanels';
 
 const SHOW_DEV = import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
 
@@ -20,6 +23,16 @@ export function GameView() {
   const v = useView();
   const outer = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
+  // 浏览器要有一次用户操作才能出声
+  useEffect(() => {
+    const u = () => unlockAudio();
+    window.addEventListener('pointerdown', u);
+    window.addEventListener('keydown', u);
+    return () => {
+      window.removeEventListener('pointerdown', u);
+      window.removeEventListener('keydown', u);
+    };
+  }, []);
   useEffect(() => {
     let game: Phaser.Game | null = null;
     let dead = false;
@@ -37,17 +50,19 @@ export function GameView() {
   const k = v.k;
   return (
     <div className="stage-wrap" ref={outer}>
-      <div className="stage" style={{ width: v.vw * k, height: v.vh * k, ['--k' as string]: k, ['--vw' as string]: v.vw, ['--vh' as string]: v.vh, ['--pw' as string]: BALANCE.ui.panel.w, ['--ph' as string]: BALANCE.ui.panel.h }}>
+      <div className={'stage' + (isTouch() ? ' is-touch' : '')} style={{ width: v.vw * k, height: v.vh * k, ['--k' as string]: k, ['--vw' as string]: v.vw, ['--vh' as string]: v.vh, ['--pw' as string]: BALANCE.ui.panel.w, ['--ph' as string]: BALANCE.ui.panel.h }}>
         <div className="canvas-host" ref={host} />
         <Hud />
         <div className="hud">
           <WorldLayer />
         </div>
         <PanelHost />
+        <TouchControls />
         <JoinedPopup />
         <RecipePopup />
         <DeathPopup />
         <ReportPopup />
+        <CutscenePopup />
       </div>
       {SHOW_DEV && <DevPanel />}
     </div>

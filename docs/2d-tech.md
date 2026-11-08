@@ -56,7 +56,7 @@ i18n/     中英词典
 | `lastFight` | 最近一次海上战斗（界面显示一张小卡片） |
 | `pendingCrate.x / y` | 漂流物在海面上的位置 |
 
-存档：`sim/save.ts`，`SAVE_VERSION = 6`（v6：自动入库机、`joined`、`lastDeath`，A 段四座岛按新地图重新长树和草药），键 `foghaul2d.save.v1`（v4：每座岛都长树和草药；v5：设施暂存箱 `isl.output`、`state.today`、`state.report`。旧档里超出新格子的东西保留，只是放不进新的）。读旧档的测试在 `tests/storage2d.test.ts`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
+存档：`sim/save.ts`，`SAVE_VERSION = 7`（v7：结构没变，所有岛按新地图重新长树和草药；v6：自动入库机、`joined`、`lastDeath`，A 段四座岛按新地图重新长树和草药），键 `foghaul2d.save.v1`（v4：每座岛都长树和草药；v5：设施暂存箱 `isl.output`、`state.today`、`state.report`。旧档里超出新格子的东西保留，只是放不进新的）。读旧档的测试在 `tests/storage2d.test.ts`。改结构就提升版本并在 `migrate()` 里写迁移，同时加一条读旧档的测试（见 `tests/guide2d.test.ts`）。
 
 界面临时状态（不存档）在 `store/view.ts` 的 `ViewState`：开着的面板、选中的物体、按键提示、初见介绍、正在做的动作、快捷栏选中格、“+1”、调试用的画面时刻。
 
@@ -185,7 +185,38 @@ i18n/     中英词典
 - **培训**：设施面板的“培训”分页（`IslandPanels.tsx` 的 `useTraining`）：学生 = 这座岛的原住民，老师 = 在场（岛上 + 船上）且 `teachableJobs` 不为空的同伴，工作 = 老师能教的。命令 `train` 要在设施旁（`objectFor` → `facility`）。网络里还没有设施的原住民岛，设施槽位上是**设施地基**（精灵 `facilityBase`，种类还是 `facility`，有自己的初见介绍 `intro2d.facilityBase`），培训后变成设施。
 - **人物面板**（P）：`Panels.tsx` 的 `PeoplePanel`，一人一张卡。
 - **倒下**：`advance.ts` 的 `die()` 记 `state.lastDeath`，`DeathPopup` 弹卡片，`ackDeath`。
-- **专门地图**：`config/maps.ts` 的 `MAPS` 里有 `stoneIsle`、`forestIsle`、`nativeA`、`fisherIsle`；其他岛还用通用模板。
+- **专门地图**：`config/maps.ts` 的 `MAPS` 里每座岛都有专门地图（M3 做了 A 段四座，M4 补齐其余十座）；通用模板 `GENERIC_MAPS` 只给 MOD 加的岛兜底。
+
+## 10.8 村落、建设、运输、终局（M4 / M5）
+
+全部是“世界里的建筑 + 打开它的面板”，规则沿用文字版的 `sim/villages.ts`、`transport.ts`、`endgame.ts`，2D 加的是物体、位置校验和面板。
+
+| 建筑（物体种类） | 在哪（模板槽位） | 什么时候出现 | 按 E | 命令（`objectFor`） |
+| --- | --- | --- | --- | --- |
+| 请求板 `board` | 村落的 `board` | 一直有 | `BoardPanel`：全部请求一行一个（做完打勾、当前亮、后面暗），每行右边是奖励格；两村争水时多一页“争水” | `deliver`（村落里）、`choose` |
+| 村长 / 办事员 `npc@elder` / `npc@clerk` | `npc` 的第一个 | 一直有（`hostOf`） | 对话：村子介绍 + 指向请求板 / 大门 | — |
+| 学堂 `school` | 配方村的 `school` | 一直有 | `SchoolPanel`：请求换来、还没人学的配方，要谁来学（在场亮）；正在学的画进度条 | `learn` |
+| 建设地基 `plot`（`plotSign`） | 网络岛的 `plot`（主岛也有，只能建仓库） | 还有能建的东西时 | `PlotPanel`：每种一页（小屋 / 仓库 / 停机坪），图、作用、材料 | `build bed / depot / helipad` |
+| 小屋 `hut`（种类 `bed`）、仓库棚 `shed`、停机坪 `pad`（种类 `helipad`） | `hut`、`shed`、`pad` | 建好以后 | 小屋：睡觉；停机坪：飞 | `sleep`、`fly` |
+| 船坞 `shipyard` | 主岛的 `shipyard` | 船坞村出现以后（`shipyardOpen`） | `ShipyardPanel`：分页“运输木筏”（造船，工程师在场）、“船员”（飞行员培训原住民）、“运输线”（一条线一行，新开一条） | `buildTransportRaft`、`train`（船员）、`createRoute` / `updateRoute` / `deleteRoute` |
+| 农田 `farm`（主岛的木牌） | 模板固定物体 | 一直有 | `FarmPanel`：三块地（苗 / 麦穗、还剩几小时），农民在才能种 | `plant`、`harvest` |
+| 残骸 `wreck` | 主岛固定物体 | 修好以前 | `WreckPanel`：五个零件（装好 / 在背包 / 从哪个村换），修飞机的卡（飞行员、材料） | `installPart`、`repairPlane` |
+| 直升机 `plane`（种类 `helipad`） | 残骸的位置 | 修好以后（`objectsOn` 把残骸换掉） | `HelipadPanel`：有停机坪的岛，点一座飞过去 | `fly` |
+| 进出口局 `office` | 进出口局的 `office` | 一直有 | `OfficePanel`：没汇报时只有“汇报”（结局）；汇报以后分页“出口 / 订单 / 升级” | `report`、`export`、`buyUpgrade` |
+
+- **槽位上的东西**统一在 `sim/interact.ts` 的 `stateObjects` 里按存档给出；槽位 → 精灵的表是 `config/buildings.ts` 的 `SLOT_SPRITE`（地图测试按它算底座和互动范围）。
+- **位置校验更严的建筑**：工作台、学堂、船坞、进出口局、停机坪只在特定的岛上有，`positionError` 对它们不退回文字版规则——岛上没有这种建筑就不能做（`STRICT`）。船员培训例外（别的岛的设施也能教）。
+- **村落里的房子**是装饰（`house_d`、`hut_d`），不能睡；网络岛上睡觉要先在建设地基上建小屋。
+- **运输木筏在海上**：`SeaScene.updateCargoRafts` 每帧按规则层的 `boatPos`（格子坐标，先横后竖）摆一只小木筏（`mcargo` / 装着货 `mcargo1`），在迷雾里的不画。
+- **飞**：`fly` 和试飞落地（`endCutscene`）用 `placeAtKind(state, 岛, 'helipad')` 把人放到停机坪前；场景按 `player.at` 切换。
+- **过场**：`state.cutscene`（试飞、结局）由 `EndPanels.tsx` 的 `CutscenePopup` 一句一句放（E / Enter / 空格），过场时 `store.hold('cutscene')` 暂停时间；结局卡有一行成绩（天数、同伴、网络、产出、运输）。之后是无尽模式（订单、出口、升级）。
+- **目标箭头**：第一天脚本走完以后，`guide.ts` 的 `pointerStep` 改用 `objectives.ts` 的 `objectiveTarget`（这一步要去哪座岛的哪种建筑：村子的请求板 → 学堂、船坞、残骸、进出口局……），岛上指物体、在别的岛就指码头、海上指那座岛；目标岛还没出现就指去修锚点岛的灯塔。
+
+## 10.9 音效、庆祝、触屏
+
+- **音效**：`src/audio/sfx.ts` 用 Web Audio 现场合成（没有音频文件）。音效表在 `config/audio.ts`：`SOUNDS`（每个音效几个音：波形 / 噪声、频率、滑音、时长、音量、延迟），`CMD_SOUND`（命令 → 音效；采集按采什么、吃喝按东西另算，见 `soundFor`）。`GameStore.dispatch` 成功后放对应的音效，有人加入放 `fanfare`，失败放 `err`（画面层每帧发的命令除外）；新的一天 `morning`、倒下 `hurt`；面板开关 `open` / `close`（`PanelHost`）。浏览器要有一次按键 / 点击之后才能出声（`unlockAudio`）。音量在菜单里调（静音 / 小 / 中 / 大），存在 `localStorage` 的 `foghaul2d.volume`，读写失败就用默认值。
+- **庆祝**：升级、修好飞机、买升级、汇报、有人加入时，`GameStore` 发一次 `celebrate`（`store.onFx`），岛上场景在人物头顶分三次撒亮片（`IslandScene.onFx`）。
+- **触屏**：`ui/hud/Touch.tsx`。触屏设备（`pointer: coarse`）或地址带 `?touch` 时：左下虚拟摇杆（`setStick`，中间一小圈不动），右下大的互动键写着现在能做的事（就是 E 的按键提示），X / Z / F 能用时才出现，上面一排背包、海图、菜单 / 关闭。按下去走 `fire(action)`，和键盘同一条路。触屏时左下日志和右下选中物品卡让位（`.is-touch`）。
 
 ## 10.6 昨日收成
 

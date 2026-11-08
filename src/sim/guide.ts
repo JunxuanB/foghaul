@@ -10,6 +10,7 @@ import type { GameState } from './types';
 import { findIsland, island, stockGet } from './util';
 import { ISLANDS, REVEALS } from '../config/world';
 import { whereMsg } from './hints';
+import { objectiveTarget } from './objectives';
 
 const RAFT_WOOD = RECIPES.raft.inputs.wood ?? 0;
 /** 第一座要去的岛和那里的同伴（REVEALS 的第一条） */
@@ -108,4 +109,16 @@ export function currentGuide(state: GameState): GuideStep | null {
   const late = min >= BALANCE.time.sleepAllowedFrom || min < BALANCE.time.dayStart;
   if (late && state.player.at === 'home' && state.time < BALANCE.time.startMinute + 1440 * 3) return NIGHT_STEP;
   return GUIDE[state.guide.step] ?? null;
+}
+
+/**
+ * 引导箭头指向哪：第一天脚本的这一步；脚本走完以后，指向当前目标要去的地方（objectives.ts 的 objectiveTarget）。
+ * 返回的步骤只用它的 target / at，不用于目标卡的文字。
+ */
+export function pointerStep(state: GameState): GuideStep | null {
+  const step = currentGuide(state);
+  if (step) return step;
+  const o = objectiveTarget(state);
+  if (!o) return null;
+  return { id: 'objective', target: { kind: 'object', obj: o.obj }, at: o.at, done: () => false, detail: () => m('none') };
 }

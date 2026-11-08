@@ -6,7 +6,7 @@ import { ISLANDS } from '../../config/world';
 import { t } from '../../i18n';
 import { buildCost, canUseStock, here } from '../../sim/actions';
 import { canPay, carriedForNeed, needItems } from '../../sim/inventory';
-import { charOf } from '../../sim/interact';
+import { charOf, hostOf } from '../../sim/interact';
 import { jobMsg, personLabel } from '../../sim/people';
 import type { Island, Job, Person } from '../../sim/types';
 import { isLit } from '../../sim/map';
@@ -86,8 +86,11 @@ function LightRings({ r }: { r: number }) {
 
 /** 一个人这时候说的几句话（词典键）：没救出来时求助，救出来以后是平常话 */
 function linesOf(isl: Island, who: Person | undefined): string[] {
-  if (isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau') return ['island.' + isl.id + '.intro'];
+  // 村长 / 办事员：村子的介绍，再指一下请求板 / 大门
+  if (!who && hostOf(isl)) return ['island.' + isl.id + '.intro', isl.kind === 'bureau' ? 'talk.clerk.hint' : 'talk.elder.hint'];
   const key = who?.role ?? 'native';
+  // 人力村里等着上船的原住民
+  if (who && who.active && who.type === 'native' && !who.job && !isl.owned) return ['talk.native.hired'];
   if (!who || !who.active) return ['talk.' + key + '.plea', 'talk.' + key + '.plea2'];
   if (who.type === 'native') return [who.job ? 'talk.native.working' : 'talk.native.idle'];
   return ['talk.' + key + '.idle'];
@@ -123,11 +126,11 @@ export function TalkPanel() {
   if (!isl) return null;
   const def = ISLANDS.find((x) => x.id === isl.id);
   const need = def?.rescueNeed ?? def?.recruitNeed;
-  const village = isl.kind === 'recipeVillage' || isl.kind === 'laborVillage' || isl.kind === 'bureau';
-  const title = who ? label(personLabel(who)) : t('ui.villager');
+  const host = hostOf(isl);
+  const title = who ? label(personLabel(who)) : t(host === 'clerk' ? 'ui.clerk' : 'ui.elder');
   const face = (
     <div className="v-who">
-      <Portrait char={who ? charOf(who) : 'islander'} name={title} big />
+      <Portrait char={who ? charOf(who) : host ?? 'islander'} name={title} big />
       {who?.role && t('role.' + who.role) !== title && <span className="u-dim">{t('role.' + who.role)}</span>}
     </div>
   );
@@ -145,22 +148,28 @@ export function TalkPanel() {
       <span className="u-key">E</span> {t('ui.nextLine')}
     </button>
   );
-  // 村落、进出口局：请求在请求板上（下一阶段开放）
-  if (village || !need) return <Panel title={title} icon="ui_person" status={<span className="u-dim">{t('ui.villageSoon')}</span>} actions={more && next}>{say}</Panel>;
-  const done = need.every((n, i) => (isl.needProgress[i] ?? 0) >= n.n);
-  if (done && who && who.active) {
-    // 同伴：可以带上船
+  // 村长 / 办事员：请求在请求板上，汇报在进出口局的大门
+  if (!who)
+    return (
+      <Panel title={title} icon="ui_person" status={!more && <span className="u-dim">{t(host === 'clerk' ? 'ui.seeOffice' : 'ui.seeBoard')}</span>} actions={more && next}>
+        {say}
+      </Panel>
+    );
+  const done = !need || need.every((n, i) => (isl.needProgress[i] ?? 0) >= n.n);
+  if (who.active) {
+    // 同伴（在哪都行，比如学完配方留在村里的）、等着上船的原住民：可以带上船
     const seatsLeft = BALANCE.inventory.seats - g.player.aboard.length;
-    const canBoard = who.type === 'passenger' && g.player.hasRaft && seatsLeft > 0 && !who.learning;
+    const mobile = who.type === 'passenger' || !isl.owned;
+    const canBoard = mobile && g.player.hasRaft && seatsLeft > 0 && !who.learning;
     return (
       <Panel
         title={title}
         icon="ui_person"
-        status={who.type === 'passenger' && seatsLeft <= 0 ? <span className="tone-b">{t('ui.seatsFull')}</span> : <span className="u-dim">{label(jobMsg(who.job ?? (isl.facility as Job | null)))}</span>}
+        status={mobile && seatsLeft <= 0 ? <span className="tone-b">{t('ui.seatsFull')}</span> : who.learning ? <span className="u-dim">{t('ui.learningTag')}</span> : <span className="u-dim">{label(jobMsg(who.job ?? (isl.facility as Job | null)))}</span>}
         actions={
           more
             ? next
-            : who.type === 'passenger' && (
+            : mobile && (
                 <button className="u-btn" disabled={!canBoard} onClick={() => store.dispatch({ t: 'pickUp', personId: who.id })}>
                   {t('ui.boardRaft')}
                 </button>

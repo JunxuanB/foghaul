@@ -384,3 +384,61 @@ button.u-slot:hover { border-color: var(--c5); }
 .v-person > div { display: grid; gap: calc(var(--k) * 0.5px); font-size: calc(var(--k) * 5px); min-width: 0; }
 .v-person b { font-weight: 400; color: var(--c7); font-size: calc(var(--k) * 5.5px); }
 .v-person-tags { display: flex; gap: calc(var(--k) * 2px); align-items: center; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------- M4 / M5 的面板（ui/panels/NetPanels.tsx、EndPanels.tsx） */
+/* 请求板：一行一个请求（像收集包），做完打勾、当前亮、后面暗 */
+.v-reqs { display: grid; gap: calc(var(--k) * 2px); }
+.v-req { display: flex; align-items: center; gap: calc(var(--k) * 3px); padding: calc(var(--k) * 2px) calc(var(--k) * 3px); border: calc(var(--k) * 1px) solid var(--c2); }
+.v-req.cur { border-color: var(--c10); background: var(--c0); }
+.v-req.done .k-num { color: var(--c5); }
+.v-req.next .v-req-no { color: var(--c3); }
+.v-req-no { width: calc(var(--k) * 8px); text-align: center; color: var(--c11); font-size: calc(var(--k) * 6px); flex: 0 0 auto; }
+.v-req .k-cells { flex-wrap: nowrap; }
+.v-reward .k-box { border-color: var(--c9); }
+.v-reward .k-num { color: var(--c10); max-width: calc(var(--k) * 40px); overflow: hidden; text-overflow: ellipsis; }
+.v-reward.dim .k-box { border-color: var(--c2); }
+.v-reward.dim .k-num { color: var(--c4); }
+.v-say-plain { font-size: calc(var(--k) * 5.5px); color: var(--c7); }
+/* 学堂的配方卡 */
+.v-lesson { display: grid; grid-template-columns: auto auto; gap: calc(var(--k) * 1px) calc(var(--k) * 2px); align-items: center; background: none; cursor: pointer;
+  border: calc(var(--k) * 1px) solid var(--c2); padding: calc(var(--k) * 2px); color: inherit; font: inherit; }
+.v-lesson .k-num { grid-column: 1 / -1; font-size: calc(var(--k) * 5px); color: var(--c6); }
+.v-lesson.on { border-color: var(--c10); background: var(--c0); }
+/* 运输线 */
+.u-sel { font: inherit; font-size: calc(var(--k) * 5px); background: var(--c0); color: var(--c7); border: calc(var(--k) * 1px) solid var(--c3); padding: 0 calc(var(--k) * 1px); height: calc(var(--k) * 10px); max-width: calc(var(--k) * 56px); }
+.v-routes { display: grid; gap: calc(var(--k) * 2px); }
+.v-route { grid-template-columns: auto 1fr auto auto auto auto; align-items: center; column-gap: calc(var(--k) * 3px); padding: calc(var(--k) * 1px) calc(var(--k) * 3px); font-size: calc(var(--k) * 5px); }
+.v-route b { font-weight: 400; color: var(--c11); }
+.v-route-ends { display: inline-flex; align-items: center; gap: calc(var(--k) * 1.5px); color: var(--c7); white-space: nowrap; overflow: hidden; }
+.v-route-state { display: inline-flex; align-items: center; gap: calc(var(--k) * 2px); }
+.v-route .k-face { width: calc(var(--k) * 14px); height: calc(var(--k) * 14px); }
+.v-route .k-face img { width: calc(var(--k) * 18px); height: calc(var(--k) * 24px); left: calc(var(--k) * -2px); top: calc(var(--k) * -1px); }
+.v-route .u-btn { font-size: calc(var(--k) * 5px); padding: 0 calc(var(--k) * 3px); }
+.v-route-form { display: flex; align-items: center; gap: calc(var(--k) * 2px); flex-wrap: wrap; }
+/* 进出口局 */
+.v-sell { background: none; border: 0; padding: 0; cursor: pointer; display: grid; justify-items: center; color: inherit; font: inherit; }
+.v-sell:hover .k-box { border-color: var(--c10); }
+.v-price { display: inline-flex; align-items: center; gap: calc(var(--k) * 0.5px); font-size: calc(var(--k) * 4.5px); color: var(--c10); }
+.v-wide { grid-column: 1 / -1; }
+.v-summary { display: flex; flex-wrap: wrap; gap: calc(var(--k) * 2px); }
+.u-btn.sec.on { box-shadow: inset 0 calc(var(--k) * -2px) 0 var(--c1), 0 0 0 calc(var(--k) * 1px) var(--c10); color: var(--c11); }
+/* 过场 */
+.v-cut { display: grid; grid-template-columns: auto 1fr; gap: calc(var(--k) * 6px); align-items: start; }
+.shade.dark { background: var(--c0); }
+
+/* ---------------------------------------------------------------- 触屏操作（ui/hud/Touch.tsx） */
+.touch { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.touch > * { pointer-events: auto; }
+.t-stick { position: absolute; left: calc(var(--k) * 10px); bottom: calc(var(--k) * 30px); width: calc(var(--k) * 56px); height: calc(var(--k) * 56px);
+  border-radius: 50%; background: var(--c1); box-shadow: inset 0 0 0 calc(var(--k) * 1px) var(--c4); touch-action: none; }
+.t-stick i { position: absolute; left: 50%; top: 50%; width: calc(var(--k) * 20px); height: calc(var(--k) * 20px); border-radius: 50%; background: var(--c4);
+  box-shadow: inset 0 0 0 calc(var(--k) * 1px) var(--c6);
+  transform: translate(calc(-50% + var(--x) * var(--k) * 18px), calc(-50% + var(--y) * var(--k) * 18px)); }
+.t-right { position: absolute; right: calc(var(--k) * 6px); bottom: calc(var(--k) * 30px); display: grid; gap: calc(var(--k) * 3px); justify-items: end; pointer-events: none; }
+.t-row { display: flex; gap: calc(var(--k) * 3px); align-items: center; pointer-events: auto; }
+.t-btn { font: inherit; font-size: calc(var(--k) * 5.5px); min-width: calc(var(--k) * 22px); height: calc(var(--k) * 16px); padding: 0 calc(var(--k) * 3px);
+  background: var(--c2); color: var(--c7); border: 0; box-shadow: inset 0 0 0 calc(var(--k) * 1px) var(--c4); touch-action: none; }
+.t-btn.big { min-width: calc(var(--k) * 44px); height: calc(var(--k) * 30px); background: var(--c9); color: var(--c0); font-size: calc(var(--k) * 6px); box-shadow: inset 0 calc(var(--k) * -2px) 0 var(--c8); }
+.t-btn.big.dim { background: var(--c2); color: var(--c4); box-shadow: inset 0 0 0 calc(var(--k) * 1px) var(--c3); }
+/* 触屏时左下的日志和右下的选中物品让位给摇杆和按键 */
+.is-touch .hud-bl, .is-touch .hud-br { display: none; }

@@ -4,7 +4,8 @@ import { RECIPES } from '../config/recipes';
 
 const RAFT_WOOD = RECIPES.raft.inputs.wood ?? 0;
 import type { Role } from '../config/recipes';
-import { ISLANDS, OBJECTIVE_ISLAND } from '../config/world';
+import { ISLANDS, OBJECTIVE_ISLAND, VILLAGES, type VillageId } from '../config/world';
+import type { ObjKind } from '../config/buildings';
 import { partsCollected } from './endgame';
 import { carried, needMsg } from './inventory';
 import { needsLighthouse } from './reveal';
@@ -125,4 +126,86 @@ function routeDetail(state: GameState): Msg {
 export function currentObjective(state: GameState): Objective {
   const l = objectives(state);
   return l.find((x) => !x.done) ?? l[l.length - 1];
+}
+
+/** 当前目标要去哪：哪座岛、岛上的哪种东西（HUD 和场景里的引导箭头用；第一天脚本结束以后才用它） */
+export interface ObjectiveTarget {
+  at: string;
+  obj: ObjKind;
+}
+
+const PART_VILLAGES: { vid: VillageId; isl: string }[] = [
+  { vid: 'tide', isl: 'village1' },
+  { vid: 'dock', isl: 'village3' },
+  { vid: 'labor', isl: 'laborVillage' },
+  { vid: 'wheat', isl: 'village2' },
+];
+
+/** 目标岛还没出现：先去修锚点岛的灯塔 */
+function reach(state: GameState, id: string, obj: ObjKind): ObjectiveTarget | null {
+  const isl = findIsland(state, id);
+  if (isl?.revealed) return { at: id, obj };
+  const lh = needsLighthouse(state, id);
+  return lh ? { at: lh, obj: 'lighthouse' } : null;
+}
+
+function learnAt(state: GameState, id: string, recipe: string): ObjectiveTarget | null {
+  const v = findIsland(state, id);
+  if (!v?.revealed) return reach(state, id, 'board');
+  const vid = PART_VILLAGES.find((x) => x.isl === id)?.vid;
+  const pending = vid ? state.villages[vid].pendingRecipes.includes(recipe as never) : false;
+  return { at: id, obj: pending ? 'school' : 'board' };
+}
+
+export function objectiveTarget(state: GameState): ObjectiveTarget | null {
+  const o = currentObjective(state);
+  const npcAt = (id: string) => reach(state, id, 'npc');
+  switch (o.id) {
+    case 'engineer':
+    case 'lumberjack':
+    case 'fisher':
+    case 'farmer':
+    case 'doctor':
+      return npcAt(OBJECTIVE_ISLAND[o.id]);
+    case 'firstTraining':
+      return findIsland(state, 'nativeA')?.owned ? { at: 'nativeA', obj: 'facility' } : npcAt('nativeA');
+    case 'pilot': {
+      const p = roleOf(state, 'pilot');
+      if (!p?.active) return npcAt('pilotIsle');
+      if (p.loc.kind === 'raft') return { at: 'home', obj: 'raft' };
+      return p.loc.kind === 'island' ? { at: p.loc.id, obj: 'npc' } : null;
+    }
+    case 'grilledFish':
+      return learnAt(state, 'village1', 'grilledFish');
+    case 'bread':
+      return learnAt(state, 'village2', 'bread');
+    case 'route': {
+      const eng = roleOf(state, 'engineer');
+      if (!eng?.recipes.includes('transportRaft')) return learnAt(state, 'village3', 'transportRaft');
+      if (state.transport.rafts < 1) return { at: 'home', obj: 'shipyard' };
+      if (!state.people.some((p) => p.active && p.job?.kind === 'crew')) {
+        const recruit = state.people.find((p) => p.type === 'native' && p.active && !p.job && p.loc.kind === 'island' && !findIsland(state, p.loc.id)?.owned);
+        if (recruit && recruit.loc.kind === 'island') return { at: recruit.loc.id, obj: 'npc' };
+        const aboard = state.people.some((p) => p.type === 'native' && p.loc.kind === 'raft');
+        return aboard ? { at: 'home', obj: 'shipyard' } : reach(state, 'laborVillage', 'board');
+      }
+      return { at: 'home', obj: 'shipyard' };
+    }
+    case 'parts': {
+      if (state.flags.waterDispute === 'pending') return { at: 'village2', obj: 'board' };
+      for (const { vid, isl } of PART_VILLAGES) {
+        const def = VILLAGES[vid];
+        const left = def.requests.slice(state.villages[vid].favor).some((r) => r.reward.part);
+        if (left) return reach(state, isl, 'board');
+      }
+      return { at: 'home', obj: 'wreck' };
+    }
+    case 'repair':
+      return { at: 'home', obj: 'wreck' };
+    case 'report':
+    case 'endless':
+      return { at: 'bureau', obj: 'office' };
+    default:
+      return null;
+  }
 }

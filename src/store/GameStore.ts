@@ -1,5 +1,11 @@
 import { BALANCE } from '../config/balance';
 import { dispatch } from '../sim/actions';
+import { play, soundFor } from '../audio/sfx';
+
+/** 成功以后在人物身边放一把亮片的命令（大事） */
+const CELEBRATE = ['upgradeIsland', 'repairPlane', 'buyUpgrade', 'report'];
+/** 失败也不出声的命令（画面层每帧发的、自动的） */
+const SILENT = ['sail', 'move', 'seeIntro', 'ackGuide', 'dismissTip', 'seenRecipes'];
 import { advance } from '../sim/advance';
 import { createGame } from '../sim/create';
 import { updateUnlocks } from '../sim/tutorial';
@@ -79,17 +85,38 @@ export class GameStore {
     if (this.pending < 1) return false;
     const whole = Math.floor(this.pending);
     this.pending -= whole;
+    const day = this.state.report?.day;
+    const died = this.state.lastDeath;
     advance(this.state, whole);
+    if (this.state.report && this.state.report.day !== day) play('morning');
+    if (this.state.lastDeath && this.state.lastDeath !== died) play('hurt');
     updateUnlocks(this.state);
     this.bump();
     return true;
   }
 
   dispatch = (cmd: Command): Result => {
+    const before = this.state.joined.length;
     const r = dispatch(this.state, cmd);
+    // 音效：成功按命令放；有人加入是大事；失败（按钮之外的操作，比如按 E 时条件不够）一声低音
+    if (r.ok) {
+      const snd = this.state.joined.length > before ? 'fanfare' : soundFor(cmd);
+      if (snd) play(snd);
+      if (this.state.joined.length > before || CELEBRATE.includes(cmd.t)) this.emit('celebrate');
+    } else if (!SILENT.includes(cmd.t)) play('err');
     this.bump();
     return r;
   };
+
+  /** 画面层订阅的一次性事件（庆祝的粒子） */
+  private fx = new Set<(e: string) => void>();
+  onFx(fn: (e: string) => void): () => void {
+    this.fx.add(fn);
+    return () => this.fx.delete(fn);
+  }
+  private emit(e: string): void {
+    for (const f of this.fx) f(e);
+  }
 
   save = () => {
     saveToStorage(this.state);

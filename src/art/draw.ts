@@ -93,6 +93,22 @@ export function allSprites(): Record<string, G> {
     board: S.spBoard(),
     facilityBase: S.spFacilityBase(),
     autoStore: S.spAutoStore(),
+    // M4 / M5 的建筑
+    hut: S.spHut(),
+    // 村落里的房子只是装饰（不能睡）
+    house_d: S.spHouse(),
+    hut_d: S.spHut(),
+    shed: S.spShed(),
+    pad: S.spPad(),
+    plotSign: S.spPlotSign(),
+    school: S.spSchool(),
+    shipyard: S.spShipyard(),
+    office: S.spOffice(),
+    plane: S.spPlane(),
+    crop0: S.spCrop(0),
+    crop1: S.spCrop(1),
+    mcargo: S.spMiniCargoRaft(false),
+    mcargo1: S.spMiniCargoRaft(true),
     // 其他岛上装饰用的树（和主岛能采的树同一种画法）
     tree_d: S.spTree(5, true),
     stree_d: S.spTree(13, false),
